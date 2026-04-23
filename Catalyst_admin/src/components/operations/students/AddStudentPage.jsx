@@ -1,11 +1,6 @@
-// ============================================================
-// ADD STUDENT PAGE (Operations) — Create student + assign batch
-// Form-based workflow with mentor + batch assignment
-// ============================================================
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MOCK_MENTORS, MOCK_BATCHES } from '../../../data/mockData';
+import { studentService, mentorService, batchService } from '../../../services/api';
 
 const backIcon = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>;
 
@@ -21,36 +16,68 @@ function Field({ label, error, children }) {
   );
 }
 
+const genPassword = () => `Catalyst@${Math.floor(1000 + Math.random() * 9000)}`;
+
 export default function AddStudentPage() {
   const navigate = useNavigate();
-  const [form, setForm] = useState({
-    name: '', email: '', phone: '', course: '', mentorId: '', batchId: '',
-  });
+
+  const [mentors, setMentors] = useState([]);
+  const [batches, setBatches] = useState([]);
+  const [loadingData, setLoadingData] = useState(true);
+
+  const [form, setForm]       = useState({ name: '', email: '', phone: '', mentorId: '', batchId: '', password: genPassword() });
+  const [saving, setSaving]   = useState(false);
   const [success, setSuccess] = useState(false);
   const [errors, setErrors]   = useState({});
+  const [apiError, setApiError] = useState('');
+  const [showPwd, setShowPwd] = useState(false);
 
-  const set = (k, v) => {
-    setForm((p) => ({ ...p, [k]: v }));
-    setErrors((p) => ({ ...p, [k]: '' }));
-  };
+  useEffect(() => {
+    Promise.all([mentorService.getAll(), batchService.getAll()])
+      .then(([mRes, bRes]) => {
+        setMentors(mRes.data);
+        setBatches(bRes.data);
+      })
+      .catch(console.error)
+      .finally(() => setLoadingData(false));
+  }, []);
 
-  const availableBatches = MOCK_BATCHES.filter((b) => !form.mentorId || b.mentorId === form.mentorId);
+  const set = (k, v) => { setForm((p) => ({ ...p, [k]: v })); setErrors((p) => ({ ...p, [k]: '' })); };
+
+  const availableBatches = batches.filter((b) => !form.mentorId || b.mentor?._id === form.mentorId || b.mentorId === form.mentorId);
+
+  const selectedMentor = mentors.find((m) => m._id === form.mentorId);
+  const selectedBatch  = batches.find((b) => b._id === form.batchId);
 
   const validate = () => {
     const e = {};
-    if (!form.name.trim())   e.name     = 'Name is required';
-    if (!form.email.trim())  e.email    = 'Email is required';
-    if (!form.course.trim()) e.course   = 'Course is required';
-    if (!form.mentorId)      e.mentorId = 'Please select a mentor';
+    if (!form.name.trim())  e.name     = 'Name is required';
+    if (!form.email.trim()) e.email    = 'Email is required';
+    if (!form.password)     e.password = 'Password is required';
     return e;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
-    setSuccess(true);
-    setTimeout(() => navigate('/operations/students'), 2000);
+    setSaving(true);
+    setApiError('');
+    try {
+      await studentService.create({
+        name:     form.name.trim(),
+        email:    form.email.trim().toLowerCase(),
+        phone:    form.phone.trim() || undefined,
+        batchId:  form.batchId || undefined,
+        password: form.password,
+      });
+      setSuccess(true);
+      setTimeout(() => navigate('/operations/students'), 2000);
+    } catch (err) {
+      setApiError(err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (success) {
@@ -76,6 +103,8 @@ export default function AddStudentPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="p-7 flex flex-col gap-6">
+          {apiError && <p className="text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{apiError}</p>}
+
           {/* Personal Information */}
           <div className="flex flex-col gap-3.5">
             <h3 className="text-[13px] font-bold text-ops-primary uppercase tracking-[0.5px]">Personal Information</h3>
@@ -89,14 +118,6 @@ export default function AddStudentPage() {
               <Field label="Phone Number" error={errors.phone}>
                 <input className={inputClass} type="tel" placeholder="+91 98765 43210" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
               </Field>
-              <Field label="Course *" error={errors.course}>
-                <select className={inputClass} value={form.course} onChange={(e) => set('course', e.target.value)}>
-                  <option value="">Select course...</option>
-                  {['Full Stack Development', 'Data Science', 'UI/UX Design', 'DevOps', 'Mobile Development'].map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-              </Field>
             </div>
           </div>
 
@@ -104,48 +125,93 @@ export default function AddStudentPage() {
           <div className="flex flex-col gap-3.5">
             <h3 className="text-[13px] font-bold text-ops-primary uppercase tracking-[0.5px]">Enrollment Details</h3>
             <div className="grid grid-cols-2 gap-3.5">
-              <Field label="Assign Mentor *" error={errors.mentorId}>
-                <select className={inputClass} value={form.mentorId} onChange={(e) => { set('mentorId', e.target.value); set('batchId', ''); }}>
-                  <option value="">Select mentor...</option>
-                  {MOCK_MENTORS.map((m) => (
-                    <option key={m.id} value={m.id}>{m.name} ({m.specialization})</option>
+              <Field label="Assign Mentor" error={errors.mentorId}>
+                <select
+                  className={inputClass}
+                  value={form.mentorId}
+                  onChange={(e) => { set('mentorId', e.target.value); set('batchId', ''); }}
+                  disabled={loadingData}
+                >
+                  <option value="">{loadingData ? 'Loading...' : 'Select mentor (optional)...'}</option>
+                  {mentors.map((m) => (
+                    <option key={m._id} value={m._id}>{m.name} — {m.specialization || 'General'}</option>
                   ))}
                 </select>
               </Field>
               <Field label="Assign to Batch" error={errors.batchId}>
-                <select className={inputClass} value={form.batchId} onChange={(e) => set('batchId', e.target.value)} disabled={!form.mentorId}>
-                  <option value="">Select batch...</option>
+                <select
+                  className={inputClass}
+                  value={form.batchId}
+                  onChange={(e) => set('batchId', e.target.value)}
+                  disabled={loadingData || (!form.mentorId && availableBatches.length === 0)}
+                >
+                  <option value="">Select batch (optional)...</option>
                   {availableBatches.map((b) => (
-                    <option key={b.id} value={b.id}>{b.name} ({b.course})</option>
+                    <option key={b._id} value={b._id}>{b.name} — {b.course}</option>
                   ))}
                 </select>
               </Field>
             </div>
+            {selectedBatch && (
+              <div className="px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-[13px] text-blue-700">
+                Course: <span className="font-semibold">{selectedBatch.course}</span>
+                {selectedBatch.status && <span className="ml-3 capitalize">· Status: {selectedBatch.status}</span>}
+              </div>
+            )}
           </div>
 
           {/* Mentor preview */}
-          {form.mentorId && (() => {
-            const m = MOCK_MENTORS.find((x) => x.id === form.mentorId);
-            return m ? (
-              <div className="flex items-center gap-3 px-4 py-3.5 bg-ops-lighter rounded-xl border border-ops-light">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-ops-primary to-purple-400 text-white font-bold text-sm flex items-center justify-center shrink-0">
-                  {m.avatar}
-                </div>
-                <div>
-                  <p className="font-bold text-gray-900">{m.name}</p>
-                  <p className="text-xs text-gray-500">{m.specialization} · ⭐ {m.rating} · {m.students.length} students</p>
+          {selectedMentor && (
+            <div className="flex items-center gap-3 px-4 py-3.5 bg-ops-lighter rounded-xl border border-ops-light">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-ops-primary to-purple-400 text-white font-bold text-sm flex items-center justify-center shrink-0">
+                {selectedMentor.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+              </div>
+              <div>
+                <p className="font-bold text-gray-900">{selectedMentor.name}</p>
+                <p className="text-xs text-gray-500">
+                  {selectedMentor.specialization || 'General'}
+                  {selectedMentor.batchCount != null ? ` · ${selectedMentor.batchCount} batch(es)` : ''}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Login Credentials */}
+          <div className="flex flex-col gap-3.5">
+            <h3 className="text-[13px] font-bold text-ops-primary uppercase tracking-[0.5px]">Login Credentials</h3>
+            <Field label="Password *" error={errors.password}>
+              <div className="relative">
+                <input
+                  className={inputClass}
+                  type={showPwd ? 'text' : 'password'}
+                  value={form.password}
+                  onChange={(e) => set('password', e.target.value)}
+                  style={{ paddingRight: '80px' }}
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
+                  <button type="button" className="text-[11px] px-2 py-0.5 rounded bg-gray-100 text-gray-500 hover:bg-gray-200" onClick={() => setShowPwd(p => !p)}>
+                    {showPwd ? 'Hide' : 'Show'}
+                  </button>
+                  <button type="button" className="text-[11px] px-2 py-0.5 rounded bg-ops-lighter text-ops-primary hover:bg-ops-light" onClick={() => set('password', genPassword())}>
+                    Gen
+                  </button>
                 </div>
               </div>
-            ) : null;
-          })()}
+              <p className="text-[11px] text-gray-400 mt-0.5">Share this with the student so they can log in to the student portal.</p>
+            </Field>
+          </div>
 
           {/* Actions */}
           <div className="flex gap-3 justify-end pt-2">
             <button type="button" className="px-6 py-2.5 rounded-xl bg-gray-100 text-gray-700 font-semibold text-sm" onClick={() => navigate('/operations/students')}>
               Cancel
             </button>
-            <button type="submit" className="px-7 py-2.5 rounded-xl bg-ops-primary text-white font-bold text-sm shadow-[0_4px_14px_rgba(124,58,237,0.35)]">
-              Create Student Account
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-7 py-2.5 rounded-xl bg-ops-primary text-white font-bold text-sm shadow-[0_4px_14px_rgba(124,58,237,0.35)] disabled:opacity-50"
+            >
+              {saving ? 'Creating...' : 'Create Student Account'}
             </button>
           </div>
         </form>

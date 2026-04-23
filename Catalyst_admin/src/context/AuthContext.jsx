@@ -7,7 +7,7 @@ import { createContext, useContext, useState, useEffect } from 'react';
 
 const AuthContext = createContext(null);
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = '/api';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -39,10 +39,10 @@ export function AuthProvider({ children }) {
 
       // Save token and user to localStorage
       localStorage.setItem('catalyst_token', data.token);
-      localStorage.setItem('catalyst_user', JSON.stringify(data.user));
-      setUser(data.user);
+      localStorage.setItem('catalyst_user', JSON.stringify(data.data));
+      setUser(data.data);
 
-      return { success: true, role: data.user.role };
+      return { success: true, role: data.data.role };
 
     } catch (error) {
       return { success: false, error: 'Server unreachable. Is the backend running?' };
@@ -66,10 +66,10 @@ export function AuthProvider({ children }) {
 
       // Auto login after register
       localStorage.setItem('catalyst_token', data.token);
-      localStorage.setItem('catalyst_user', JSON.stringify(data.user));
-      setUser(data.user);
+      localStorage.setItem('catalyst_user', JSON.stringify(data.data));
+      setUser(data.data);
 
-      return { success: true, role: data.user.role };
+      return { success: true, role: data.data.role };
 
     } catch (error) {
       return { success: false, error: 'Server unreachable. Is the backend running?' };

@@ -1,21 +1,27 @@
-// ============================================================
-// MENTORS LIST PAGE (Operations)
-// ============================================================
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MOCK_STUDENTS } from '../../../data/mockData';
-import { useData } from '../../../context/DataContext';
+import { mentorService } from '../../../services/api';
 
 export default function MentorsListPage() {
   const navigate = useNavigate();
-  const { mentors } = useData();
-  const [search, setSearch] = useState('');
+  const [mentors, setMentors] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState('');
+  const [search, setSearch]   = useState('');
+
+  useEffect(() => {
+    mentorService.getAll()
+      .then(res => setMentors(res.data))
+      .catch(err => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
 
   const filtered = mentors.filter((m) =>
     m.name.toLowerCase().includes(search.toLowerCase()) ||
-    m.specialization.toLowerCase().includes(search.toLowerCase())
+    (m.specialization || '').toLowerCase().includes(search.toLowerCase())
   );
+
+  const totalBatches = mentors.reduce((a, m) => a + (m.batchCount || 0), 0);
 
   return (
     <div className="p-6 flex flex-col gap-4 fade-in">
@@ -35,10 +41,10 @@ export default function MentorsListPage() {
       {/* Summary */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: 'Total Mentors',        value: mentors.length,                                      color: '#7c3aed', bg: '#f5f3ff' },
-          { label: 'Active',               value: mentors.filter(m => m.status === 'active').length,   color: '#10b981', bg: '#d1fae5' },
-          { label: 'Total Students',       value: MOCK_STUDENTS.length,                                color: '#0d9488', bg: '#f0fdfa' },
-          { label: 'Avg Students/Mentor',  value: Math.round(MOCK_STUDENTS.length / mentors.length),   color: '#f59e0b', bg: '#fef3c7' },
+          { label: 'Total Mentors',  value: mentors.length,                                    color: '#7c3aed', bg: '#f5f3ff' },
+          { label: 'Active',         value: mentors.filter(m => m.isActive).length,             color: '#10b981', bg: '#d1fae5' },
+          { label: 'Total Batches',  value: totalBatches,                                       color: '#0d9488', bg: '#f0fdfa' },
+          { label: 'Avg Batches',    value: mentors.length ? (totalBatches / mentors.length).toFixed(1) : 0, color: '#f59e0b', bg: '#fef3c7' },
         ].map((c) => (
           <div key={c.label} className="rounded-xl px-5 py-4 border border-black/[0.04]" style={{ background: c.bg }}>
             <p className="text-[22px] font-extrabold" style={{ color: c.color }}>{c.value}</p>
@@ -57,46 +63,62 @@ export default function MentorsListPage() {
         />
       </div>
 
-      {/* Mentor cards grid */}
-      <div className="grid grid-cols-3 gap-4">
-        {filtered.map((mentor) => (
-          <button
-            key={mentor.id}
-            className="bg-white rounded-2xl border border-gray-200 p-5 text-left hover:shadow-md transition-shadow shadow-panel flex flex-col gap-3 cursor-pointer"
-            onClick={() => navigate(`/operations/mentors/${mentor.id}`)}
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-ops-primary to-purple-400 text-white font-bold text-[15px] flex items-center justify-center shrink-0">
-                {mentor.avatar}
-              </div>
-              <div className="flex-1">
-                <p className="text-[15px] font-bold text-gray-900">{mentor.name}</p>
-                <p className="text-xs text-gray-400">{mentor.specialization}</p>
-              </div>
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-100 text-green-800">
-                {mentor.status}
-              </span>
-            </div>
+      {error && <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-3">{error}</p>}
 
-            <div className="flex border-t border-gray-100 pt-3">
-              {[
-                { label: 'Students', value: mentor.students.length, color: '#7c3aed' },
-                { label: 'Sessions', value: mentor.sessionsCompleted, color: '#0d9488' },
-                { label: 'Rating',   value: `⭐ ${mentor.rating}`, color: '#f59e0b' },
-              ].map((stat) => (
-                <div key={stat.label} className="flex-1 text-center">
-                  <p className="text-xl font-extrabold" style={{ color: stat.color }}>{stat.value}</p>
-                  <p className="text-[11px] text-gray-400">{stat.label}</p>
+      {loading ? (
+        <div className="grid grid-cols-3 gap-4">
+          {[1, 2, 3].map(i => <div key={i} className="bg-white rounded-2xl border border-gray-200 h-[180px] animate-pulse" />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 text-gray-400">
+          <p className="text-4xl mb-3">👨‍🏫</p>
+          <p className="font-semibold text-gray-600">No mentors found</p>
+          <p className="text-sm mt-1">{search ? 'Try a different search' : 'Add your first mentor to get started'}</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-4">
+          {filtered.map((mentor) => {
+            const initials = mentor.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+            return (
+              <div
+                key={mentor._id}
+                className="bg-white rounded-2xl border border-gray-200 p-5 hover:shadow-md transition-shadow shadow-panel flex flex-col gap-3 cursor-pointer"
+                onClick={() => navigate(`/operations/mentors/${mentor._id}`)}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-full bg-gradient-to-br from-ops-primary to-purple-400 text-white font-bold text-[15px] flex items-center justify-center shrink-0">
+                    {initials}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[15px] font-bold text-gray-900 truncate">{mentor.name}</p>
+                    <p className="text-xs text-gray-400 truncate">{mentor.specialization || 'General'}</p>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${mentor.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
+                    {mentor.isActive ? 'active' : 'inactive'}
+                  </span>
                 </div>
-              ))}
-            </div>
 
-            <div className="border-t border-gray-100 pt-2.5">
-              <span className="text-[13px] text-ops-primary font-semibold">View Students →</span>
-            </div>
-          </button>
-        ))}
-      </div>
+                <div className="flex border-t border-gray-100 pt-3">
+                  {[
+                    { label: 'Batches',    value: mentor.batchCount ?? 0, color: '#7c3aed' },
+                    { label: 'Experience', value: mentor.experience ? `${mentor.experience}y` : '—', color: '#0d9488' },
+                    { label: 'Email',      value: mentor.email.split('@')[0], color: '#6b7280' },
+                  ].map((stat) => (
+                    <div key={stat.label} className="flex-1 text-center">
+                      <p className="text-[13px] font-bold truncate" style={{ color: stat.color }}>{stat.value}</p>
+                      <p className="text-[11px] text-gray-400">{stat.label}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t border-gray-100 pt-2.5">
+                  <span className="text-[13px] text-ops-primary font-semibold">View Details →</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

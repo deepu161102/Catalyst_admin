@@ -1,200 +1,364 @@
-// ============================================================
-// COMMUNICATION PAGE — Chat with students + announcements
-// ============================================================
-
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
-import { MOCK_STUDENTS } from '../../../data/mockData';
+import { chatService } from '../../../services/api';
+import { connectSocket, disconnectSocket } from '../../../services/socket';
 
-const INITIAL_MESSAGES = {
-  's1': [
-    { id: 1, from: 's1',    text: 'Hi! I have a question about the Redux assignment.', time: '10:02 AM' },
-    { id: 2, from: 'mentor', text: "Sure, what's the issue?", time: '10:05 AM' },
-    { id: 3, from: 's1',    text: "I'm confused about the middleware setup.", time: '10:06 AM' },
-    { id: 4, from: 'mentor', text: "Let's cover that in the next session. Meanwhile check the Redux docs on middleware.", time: '10:08 AM' },
-  ],
-  's2': [
-    { id: 1, from: 's2',    text: "Can we reschedule tomorrow's session?", time: '9:30 AM' },
-    { id: 2, from: 'mentor', text: 'Yes, what time works for you?', time: '9:45 AM' },
-  ],
-  's3': [
-    { id: 1, from: 's3',    text: 'I submitted the REST API assignment!', time: 'Yesterday' },
-    { id: 2, from: 'mentor', text: "Great! I'll review it and send feedback.", time: 'Yesterday' },
-  ],
-};
+const sendIcon = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
+  </svg>
+);
 
-const sendIcon = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>;
+function getInitials(name = '') {
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function formatTime(ts) {
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatDate(ts) {
+  const d    = new Date(ts);
+  const now  = new Date();
+  const yest = new Date(now);
+  yest.setDate(now.getDate() - 1);
+  if (d.toDateString() === now.toDateString())  return 'Today';
+  if (d.toDateString() === yest.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString();
+}
 
 export default function CommunicationPage() {
   const { user } = useAuth();
-  const myStudents = MOCK_STUDENTS.filter((s) => s.mentorId === user?.id);
 
-  const [activeStudent, setActiveStudent] = useState(myStudents[0] || null);
-  const [messages, setMessages]           = useState(INITIAL_MESSAGES);
+  const [conversations, setConversations] = useState([]);
+  const [selected, setSelected]           = useState(null);
+  const [messages, setMessages]           = useState([]);
   const [input, setInput]                 = useState('');
-  const [tab, setTab]                     = useState('chat');
-  const [announcement, setAnnouncement]   = useState('');
-  const [announcements, setAnnouncements] = useState([
-    { id: 1, text: 'Session rescheduled to Friday 3 PM for FSB-2024-01', time: '2 days ago', author: 'Arjun Sharma' },
-    { id: 2, text: 'Please complete the Redux assignment before the next session', time: '4 days ago', author: 'Arjun Sharma' },
-  ]);
+  const [search, setSearch]               = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [typing, setTyping]               = useState(false);
+  const [onlineUsers, setOnlineUsers]     = useState(new Set());
 
-  const currentMsgs = (activeStudent && messages[activeStudent.id]) || [];
+  const messagesEndRef = useRef(null);
+  const socketRef      = useRef(null);
+  const selectedRef    = useRef(null);
+  const typingTimer    = useRef(null);
 
-  const sendMessage = () => {
-    if (!input.trim() || !activeStudent) return;
-    const newMsg = {
-      id: Date.now(), from: 'mentor', text: input.trim(),
-      time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+  useEffect(() => { selectedRef.current = selected; }, [selected]);
+
+  // Socket setup — token from localStorage passed in handshake auth
+  useEffect(() => {
+    const socket = connectSocket();
+    socketRef.current = socket;
+
+    socket.on('online_users', ids     => setOnlineUsers(new Set(ids)));
+    socket.on('user_online',  ({ userId }) => setOnlineUsers(p => new Set([...p, userId])));
+    socket.on('user_offline', ({ userId }) => setOnlineUsers(p => { const n = new Set(p); n.delete(userId); return n; }));
+
+    socket.on('receive_message', msg => {
+      const cur      = selectedRef.current;
+      const senderId = msg.senderId?.toString();
+
+      if (cur && senderId === cur.userId?.toString()) {
+        setMessages(p => [...p, msg]);
+        socket.emit('message_read', { senderId: msg.senderId, receiverId: user._id });
+        chatService.markRead(msg.senderId, user._id).catch(() => {});
+        setConversations(p => p.map(c =>
+          c.userId?.toString() === senderId
+            ? { ...c, lastMessage: msg.message, lastTime: msg.timestamp, unreadCount: 0 }
+            : c
+        ));
+      } else {
+        setConversations(p => p.map(c =>
+          c.userId?.toString() === senderId
+            ? { ...c, lastMessage: msg.message, lastTime: msg.timestamp, unreadCount: (c.unreadCount || 0) + 1 }
+            : c
+        ));
+      }
+    });
+
+    socket.on('message_sent', ({ _id, tempId, timestamp }) => {
+      setMessages(p => p.map(m => m._id === tempId ? { ...m, _id, timestamp } : m));
+    });
+
+    socket.on('user_typing', ({ senderId }) => {
+      if (selectedRef.current?.userId?.toString() === senderId?.toString()) {
+        setTyping(true);
+        clearTimeout(typingTimer.current);
+        typingTimer.current = setTimeout(() => setTyping(false), 2000);
+      }
+    });
+
+    socket.on('messages_read', () => {
+      setMessages(p => p.map(m => ({ ...m, read: true })));
+    });
+
+    return () => {
+      disconnectSocket();
+      clearTimeout(typingTimer.current);
     };
-    setMessages((prev) => ({ ...prev, [activeStudent.id]: [...(prev[activeStudent.id] || []), newMsg] }));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load conversations on mount
+  useEffect(() => {
+    if (!user?._id) return;
+    chatService.getConversations(user._id)
+      .then(res => setConversations(res.data))
+      .catch(console.error);
+  }, [user?._id]);
+
+  // Load messages when selected changes
+  useEffect(() => {
+    if (!selected || !user?._id) return;
+    setMessages([]);
+    chatService.getMessages(user._id, selected.userId)
+      .then(res => setMessages(res.data))
+      .catch(console.error);
+    socketRef.current?.emit('message_read', { senderId: selected.userId, receiverId: user._id });
+    chatService.markRead(selected.userId, user._id).catch(() => {});
+    setConversations(p => p.map(c =>
+      c.userId?.toString() === selected.userId?.toString() ? { ...c, unreadCount: 0 } : c
+    ));
+  }, [selected?.userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Scroll to bottom
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Debounced search
+  useEffect(() => {
+    if (!search.trim()) { setSearchResults([]); return; }
+    const t = setTimeout(() => {
+      chatService.searchUsers(search).then(res => setSearchResults(res.data)).catch(console.error);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const handleSend = () => {
+    if (!input.trim() || !selected || !user?._id) return;
+    const tempId = `temp_${Date.now()}`;
+    const optimistic = {
+      _id: tempId, senderId: user._id, receiverId: selected.userId,
+      message: input.trim(), timestamp: new Date().toISOString(), read: false,
+    };
+    setMessages(p => [...p, optimistic]);
+    socketRef.current?.emit('send_message', {
+      senderId: user._id, receiverId: selected.userId,
+      message: input.trim(), tempId,
+    });
+    setConversations(p => {
+      const exists = p.find(c => c.userId?.toString() === selected.userId?.toString());
+      if (exists) return p.map(c =>
+        c.userId?.toString() === selected.userId?.toString()
+          ? { ...c, lastMessage: input.trim(), lastTime: new Date().toISOString() }
+          : c
+      );
+      return [{ userId: selected.userId, name: selected.name, email: selected.email, lastMessage: input.trim(), lastTime: new Date().toISOString(), unreadCount: 0 }, ...p];
+    });
     setInput('');
   };
 
-  const postAnnouncement = () => {
-    if (!announcement.trim()) return;
-    setAnnouncements((p) => [{ id: Date.now(), text: announcement.trim(), time: 'Just now', author: user?.name }, ...p]);
-    setAnnouncement('');
+  const handleKeyDown = e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); return; }
+    if (selected && user?._id) {
+      socketRef.current?.emit('typing', { senderId: user._id, receiverId: selected.userId });
+    }
   };
+
+  const handleSelectContact = contact => {
+    setSelected(contact);
+    setSearch('');
+    setSearchResults([]);
+  };
+
+  const contactList = search
+    ? searchResults.map(u => ({ userId: u._id, name: u.name, email: u.email, lastMessage: '', unreadCount: 0 }))
+    : conversations;
+
+  const grouped = messages.reduce((acc, msg) => {
+    const d = formatDate(msg.timestamp);
+    (acc[d] = acc[d] || []).push(msg);
+    return acc;
+  }, {});
 
   return (
     <div className="p-6 flex flex-col gap-4 fade-in">
       <div>
         <h2 className="text-xl font-extrabold text-gray-900">Communication</h2>
-        <p className="text-sm text-gray-500 mt-0.5">Chat with students and post announcements</p>
+        <p className="text-sm text-gray-500 mt-0.5">Chat with your students in real-time</p>
       </div>
 
-      {/* Tab toggle */}
-      <div className="flex bg-gray-100 rounded-xl p-1 gap-1 w-fit">
-        {[{ key: 'chat', label: '💬 Chat' }, { key: 'announcements', label: '📢 Announcements' }].map((t) => (
-          <button
-            key={t.key}
-            className={`px-5 py-2 rounded-[10px] text-[13px] transition-all ${tab === t.key ? 'bg-white text-mentor-primary font-bold shadow-sm' : 'text-gray-500 font-medium'}`}
-            onClick={() => setTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'chat' ? (
-        <div className="flex bg-white rounded-2xl border border-gray-200 overflow-hidden min-h-[500px]">
-          {/* Student list */}
-          <div className="w-[220px] border-r border-gray-100 overflow-y-auto shrink-0">
-            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.5px] px-3.5 pt-3.5 pb-2">Students</p>
-            {myStudents.map((s) => (
-              <button
-                key={s.id}
-                className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 transition-colors ${activeStudent?.id === s.id ? 'bg-mentor-lighter' : 'hover:bg-gray-50'}`}
-                onClick={() => setActiveStudent(s)}
-              >
-                <div
-                  className="w-[34px] h-[34px] rounded-full text-white font-bold text-xs flex items-center justify-center shrink-0"
-                  style={{ background: `hsl(${s.id.charCodeAt(1) * 25}, 60%, 50%)` }}
-                >
-                  {s.avatar}
-                </div>
-                <div className="text-left flex-1 overflow-hidden">
-                  <p className="text-[13px] font-semibold text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis">{s.name}</p>
-                  <p className="text-[11px] text-gray-400">
-                    {messages[s.id]?.slice(-1)[0]?.text?.slice(0, 28) || 'No messages yet'}...
-                  </p>
-                </div>
-              </button>
-            ))}
+      <div className="flex bg-white rounded-2xl border border-gray-200 overflow-hidden" style={{ height: 'calc(100vh - 200px)' }}>
+        {/* ── Contact list ── */}
+        <div className="w-[240px] border-r border-gray-100 flex flex-col shrink-0">
+          <div className="px-3.5 pt-3.5 pb-2.5 border-b border-gray-100">
+            <p className="text-[11px] font-bold text-gray-400 uppercase tracking-[0.5px] mb-2">Students</p>
+            <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-[6px]">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input
+                placeholder="Search students..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="flex-1 border-none bg-transparent text-[12px] text-gray-900 outline-none placeholder:text-gray-400"
+              />
+            </div>
           </div>
 
-          {/* Chat window */}
-          <div className="flex-1 flex flex-col">
-            {activeStudent ? (
-              <>
-                <div className="px-4 py-3.5 border-b border-gray-100 flex items-center gap-2.5">
-                  <div
-                    className="w-[34px] h-[34px] rounded-full text-white font-bold text-xs flex items-center justify-center shrink-0"
-                    style={{ background: `hsl(${activeStudent.id.charCodeAt(1) * 25}, 60%, 50%)` }}
-                  >
-                    {activeStudent.avatar}
+          <div className="flex-1 overflow-y-auto">
+            {contactList.length === 0 ? (
+              <p className="text-[12px] text-gray-400 text-center px-3 py-6">
+                {search ? 'No students found' : 'No conversations yet — search to start one'}
+              </p>
+            ) : (
+              contactList.map(contact => (
+                <button
+                  key={contact.userId}
+                  onClick={() => handleSelectContact(contact)}
+                  className={`w-full flex items-center gap-2.5 px-3.5 py-2.5 transition-colors text-left ${
+                    selected?.userId?.toString() === contact.userId?.toString()
+                      ? 'bg-teal-50 border-r-[3px] border-r-teal-600'
+                      : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="relative shrink-0">
+                    <div
+                      className="w-[34px] h-[34px] rounded-full text-white font-bold text-xs flex items-center justify-center"
+                      style={{ background: `hsl(${(contact.name?.charCodeAt(0) || 0) * 15}, 55%, 48%)` }}
+                    >
+                      {getInitials(contact.name)}
+                    </div>
+                    {onlineUsers.has(contact.userId?.toString()) && (
+                      <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white absolute bottom-0 right-0" />
+                    )}
                   </div>
-                  <div>
-                    <p className="text-sm font-bold text-gray-900">{activeStudent.name}</p>
-                    <p className="text-[11px] text-green-500">● Online</p>
+                  <div className="flex-1 overflow-hidden">
+                    <p className="text-[13px] font-semibold text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis">{contact.name}</p>
+                    <p className="text-[11px] text-gray-400 whitespace-nowrap overflow-hidden text-ellipsis">
+                      {contact.lastMessage || contact.email}
+                    </p>
                   </div>
-                </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    {contact.lastTime && (
+                      <span className="text-[10px] text-gray-400">{formatTime(contact.lastTime)}</span>
+                    )}
+                    {contact.unreadCount > 0 && (
+                      <span className="bg-teal-600 text-white text-[10px] font-bold px-1.5 py-[2px] rounded-full min-w-[18px] text-center">
+                        {contact.unreadCount}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
 
-                <div className="flex-1 overflow-y-auto p-4">
-                  {currentMsgs.map((msg) => {
-                    const isMe = msg.from === 'mentor';
+        {/* ── Chat window ── */}
+        {selected ? (
+          <div className="flex-1 flex flex-col">
+            {/* Header */}
+            <div className="px-4 py-3.5 border-b border-gray-100 flex items-center gap-2.5">
+              <div className="relative">
+                <div
+                  className="w-[34px] h-[34px] rounded-full text-white font-bold text-xs flex items-center justify-center"
+                  style={{ background: `hsl(${(selected.name?.charCodeAt(0) || 0) * 15}, 55%, 48%)` }}
+                >
+                  {getInitials(selected.name)}
+                </div>
+                {onlineUsers.has(selected.userId?.toString()) && (
+                  <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white absolute bottom-0 right-0" />
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-bold text-gray-900">{selected.name}</p>
+                <p className="text-[11px] font-medium">
+                  {typing
+                    ? <span className="text-teal-600">typing...</span>
+                    : <span className={onlineUsers.has(selected.userId?.toString()) ? 'text-emerald-500' : 'text-gray-400'}>
+                        {onlineUsers.has(selected.userId?.toString()) ? '● Online' : '○ Offline'}
+                      </span>
+                  }
+                </p>
+              </div>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-1 bg-gray-50">
+              {Object.entries(grouped).map(([date, msgs]) => (
+                <div key={date}>
+                  <div className="flex items-center gap-3 py-1 my-2">
+                    <div className="flex-1 h-px bg-gray-200" />
+                    <span className="text-[11px] text-gray-400 font-semibold whitespace-nowrap">{date}</span>
+                    <div className="flex-1 h-px bg-gray-200" />
+                  </div>
+                  {msgs.map(msg => {
+                    const isMe = msg.senderId?.toString() === user._id?.toString();
                     return (
-                      <div key={msg.id} className={`flex mb-2.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                      <div key={msg._id} className={`flex mb-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
                         <div className="max-w-[70%]">
                           <div
                             className="px-3.5 py-2 rounded-[14px] text-[13px] leading-relaxed"
                             style={{
-                              background: isMe ? '#0d9488' : '#f3f4f6',
+                              background: isMe ? '#0d9488' : '#ffffff',
                               color: isMe ? '#fff' : '#374151',
+                              border: isMe ? 'none' : '1px solid #e5e7eb',
                               borderBottomRightRadius: isMe ? 4 : 14,
-                              borderBottomLeftRadius: isMe ? 14 : 4,
+                              borderBottomLeftRadius:  isMe ? 14 : 4,
                             }}
                           >
-                            {msg.text}
+                            {msg.message}
                           </div>
-                          <p className={`text-[10px] text-gray-400 mt-0.5 ${isMe ? 'text-right' : 'text-left'}`}>{msg.time}</p>
+                          <p className={`text-[10px] text-gray-400 mt-0.5 flex items-center gap-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                            {formatTime(msg.timestamp)}
+                            {isMe && <span>{msg.read ? '✓✓' : '✓'}</span>}
+                          </p>
                         </div>
                       </div>
                     );
                   })}
                 </div>
+              ))}
 
-                <div className="px-4 py-3 border-t border-gray-100 flex gap-2">
-                  <input
-                    className="flex-1 px-3.5 py-2.5 rounded-[10px] border-[1.5px] border-gray-200 text-[13px] outline-none"
-                    placeholder="Type a message..."
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                  />
-                  <button
-                    className="w-10 h-10 rounded-[10px] bg-mentor-primary text-white flex items-center justify-center shrink-0"
-                    onClick={sendMessage}
-                  >
-                    {sendIcon}
-                  </button>
+              {typing && (
+                <div className="flex justify-start mb-2">
+                  <div className="bg-white border border-gray-200 rounded-[14px] rounded-bl-[4px] px-3.5 py-2 text-gray-400 text-[13px] italic">
+                    typing...
+                  </div>
                 </div>
-              </>
-            ) : (
-              <div className="flex-1 flex items-center justify-center text-gray-400">Select a student to start chatting</div>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3.5">
-          <div className="bg-white rounded-[14px] p-5 border border-gray-200">
-            <p className="text-sm font-bold text-gray-900 mb-2.5">Post Announcement</p>
-            <textarea
-              className="w-full px-3.5 py-2.5 rounded-[10px] border-[1.5px] border-gray-200 text-[13px] resize-y outline-none mb-2.5"
-              rows={3}
-              placeholder="Write an announcement for all your students..."
-              value={announcement}
-              onChange={(e) => setAnnouncement(e.target.value)}
-            />
-            <button className="px-5 py-2 rounded-[10px] bg-mentor-primary text-white font-semibold text-[13px]" onClick={postAnnouncement}>
-              Post Announcement
-            </button>
-          </div>
+              )}
 
-          <div className="flex flex-col gap-2.5">
-            {announcements.map((a) => (
-              <div key={a.id} className="bg-white rounded-xl px-5 py-3.5 border border-gray-200 flex gap-3 items-start">
-                <span className="text-xl">📢</span>
-                <div className="flex-1">
-                  <p className="text-sm text-gray-700">{a.text}</p>
-                  <p className="text-xs text-gray-400 mt-1">by {a.author} · {a.time}</p>
-                </div>
-              </div>
-            ))}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input */}
+            <div className="px-4 py-3 border-t border-gray-100 flex gap-2 bg-white">
+              <input
+                className="flex-1 px-3.5 py-2.5 rounded-[10px] border-[1.5px] border-gray-200 text-[13px] text-gray-900 outline-none focus:border-teal-500 transition-colors"
+                placeholder={`Message ${selected.name}...`}
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+              />
+              <button
+                onClick={handleSend}
+                style={{ opacity: input.trim() ? 1 : 0.45 }}
+                className="w-10 h-10 rounded-[10px] bg-teal-600 text-white flex items-center justify-center shrink-0 transition-opacity hover:opacity-90"
+              >
+                {sendIcon}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center text-gray-400 gap-2">
+            <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </div>
+            <p className="text-sm font-medium text-gray-500">Select a student to start chatting</p>
+            <p className="text-[13px] text-gray-400">Use the search bar to find a student</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
