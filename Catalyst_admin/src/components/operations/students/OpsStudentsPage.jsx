@@ -26,17 +26,17 @@ export default function OpsStudentsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const courses = [...new Set(students.map((s) => s.batchId?.course).filter(Boolean))];
+  const courses = [...new Set(students.flatMap((s) => (s.batchIds || []).map(b => b?.course)).filter(Boolean))];
 
   const filtered = students.filter((s) => {
-    const mentorId = s.batchId?.mentorId?._id?.toString();
-    const course   = s.batchId?.course || '';
-    const status   = s.isActive ? 'active' : 'inactive';
+    const mentorIds = (s.batchIds || []).map(b => b?.mentorId?._id?.toString()).filter(Boolean);
+    const batchCourses = (s.batchIds || []).map(b => b?.course).filter(Boolean);
+    const status = s.isActive ? 'active' : 'inactive';
 
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.email.toLowerCase().includes(search.toLowerCase());
-    const matchMentor = filterMentor === 'all' || mentorId === filterMentor;
+    const matchMentor = filterMentor === 'all' || mentorIds.includes(filterMentor);
     const matchStatus = filterStatus === 'all' || status === filterStatus;
-    const matchCourse = filterCourse === 'all' || course === filterCourse;
+    const matchCourse = filterCourse === 'all' || batchCourses.includes(filterCourse);
     return matchSearch && matchMentor && matchStatus && matchCourse;
   });
 
@@ -116,13 +116,15 @@ export default function OpsStudentsPage() {
         ) : filtered.length === 0 ? (
           <div className="p-10 text-center text-gray-400">No students match your filters</div>
         ) : filtered.map((s) => {
-          const initials  = s.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-          const mentor    = s.batchId?.mentorId;
-          const course    = s.batchId?.course || '—';
-          const batchName = s.batchId?.name   || '—';
-          const isActive  = s.isActive !== false;
-          const progress  = s.progress || 0;
-          const pc        = progress >= 80 ? '#10b981' : progress >= 50 ? '#f59e0b' : '#ef4444';
+          const initials      = s.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+          const batches       = s.batchIds || [];
+          const uniqueCourses = [...new Set(batches.map(b => b?.course).filter(Boolean))];
+          const courseLabel   = uniqueCourses.length === 0 ? '—' : uniqueCourses.length === 1 ? uniqueCourses[0] : `${uniqueCourses.length} courses`;
+          const batchLabel    = batches.length === 0 ? '—' : batches.length === 1 ? (batches[0]?.name || '—') : `${batches.length} batches`;
+          const mentors       = [...new Map(batches.map(b => b?.mentorId).filter(Boolean).map(m => [m._id?.toString(), m])).values()];
+          const isActive      = s.isActive !== false;
+          const progress      = s.progress || 0;
+          const pc            = progress >= 80 ? '#10b981' : progress >= 50 ? '#f59e0b' : '#ef4444';
 
           return (
             <div key={s._id} className="flex items-center px-5 py-3 border-b border-gray-100 gap-3">
@@ -139,16 +141,18 @@ export default function OpsStudentsPage() {
                 </div>
               </div>
               <div className="flex-[2]">
-                <p className="text-[13px] text-gray-700">{course}</p>
-                <p className="text-[11px] text-gray-400">{batchName}</p>
+                <p className="text-[13px] text-gray-700">{courseLabel}</p>
+                <p className="text-[11px] text-gray-400">{batchLabel}</p>
               </div>
               <div className="flex-[2] flex items-center gap-2">
-                {mentor ? (
+                {mentors.length > 0 ? (
                   <>
                     <div className="w-7 h-7 rounded-full bg-gradient-to-br from-ops-primary to-purple-400 text-white font-bold text-[11px] flex items-center justify-center shrink-0">
-                      {mentor.name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                      {mentors[0].name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                     </div>
-                    <span className="text-[13px] text-gray-700 truncate">{mentor.name}</span>
+                    <span className="text-[13px] text-gray-700 truncate">
+                      {mentors.length === 1 ? mentors[0].name : `${mentors[0].name} +${mentors.length - 1}`}
+                    </span>
                   </>
                 ) : (
                   <span className="text-[13px] text-gray-400">Not assigned</span>

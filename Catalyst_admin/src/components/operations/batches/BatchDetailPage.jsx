@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { batchService, studentService } from '../../../services/api';
 
-const inputClass = 'w-full px-3 py-2.5 rounded-[10px] border-[1.5px] border-gray-200 text-[13px] outline-none bg-white focus:border-ops-primary transition-colors';
 
 function fmt(dateStr) {
   if (!dateStr) return '—';
@@ -27,10 +26,12 @@ function AddStudentModal({ batchId, onAdded, onClose }) {
       .catch(err => setError(err.message));
   }, []);
 
-  const available = all.filter(s => {
-    const sid = s.batchId?._id?.toString() || s.batchId?.toString();
-    return sid !== batchId;
-  });
+  const available = all.filter(s =>
+    !(s.batchIds || []).some(b => {
+      const bId = typeof b === 'object' ? b._id?.toString() : b?.toString();
+      return bId === batchId;
+    })
+  );
 
   const filtered = available.filter(s =>
     s.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -110,7 +111,9 @@ function AddStudentModal({ batchId, onAdded, onClose }) {
 
               {filtered.map(s => {
                 const isChecked = selected.has(s._id);
-                const batchLabel = s.batchId?.name ? `In: ${s.batchId.name}` : 'Unassigned';
+                const batchLabel = (s.batchIds || []).length > 0
+                  ? `In ${s.batchIds.length} batch${s.batchIds.length > 1 ? 'es' : ''}`
+                  : 'Unassigned';
                 return (
                   <div
                     key={s._id}
@@ -144,83 +147,6 @@ function AddStudentModal({ batchId, onAdded, onClose }) {
               onClick={handleAdd}
             >
               {saving ? 'Adding...' : `Add ${selected.size > 0 ? selected.size : ''} Student${selected.size !== 1 ? 's' : ''}`}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ── Shift Student Modal ───────────────────────────────────── */
-function ShiftStudentModal({ student, fromBatchId, onShifted, onClose }) {
-  const [batches, setBatches]     = useState([]);
-  const [targetId, setTargetId]   = useState('');
-  const [saving, setSaving]       = useState(false);
-  const [error, setError]         = useState('');
-
-  useEffect(() => {
-    batchService.getAll()
-      .then(res => setBatches(res.data))
-      .catch(err => setError(err.message));
-  }, []);
-
-  const otherBatches = batches.filter(b => b._id !== fromBatchId);
-
-  const handleShift = async () => {
-    if (!targetId) return;
-    setSaving(true);
-    try {
-      await batchService.addStudent(targetId, student._id);
-      onShifted();
-    } catch (err) {
-      setError(err.message);
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[1000] backdrop-blur-sm">
-      <div className="bg-white rounded-[18px] w-[440px] shadow-[0_20px_60px_rgba(0,0,0,0.2)] overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-          <h3 className="text-base font-bold text-gray-900">Shift Student to Another Batch</h3>
-          <button className="w-7 h-7 rounded-lg bg-gray-100 text-gray-500 flex items-center justify-center text-sm" onClick={onClose}>✕</button>
-        </div>
-        <div className="p-6 flex flex-col gap-4">
-          {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">{error}</p>}
-          <div className="bg-orange-50 rounded-xl px-4 py-3 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-400 to-orange-500 text-white font-bold text-[12px] flex items-center justify-center shrink-0">
-              {initials(student.name)}
-            </div>
-            <div>
-              <p className="text-[13px] font-semibold text-gray-900">{student.name}</p>
-              <p className="text-[11px] text-gray-500">{student.email}</p>
-            </div>
-          </div>
-          {otherBatches.length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-2">No other batches available.</p>
-          ) : (
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-gray-700">Move to Batch *</label>
-              <select className={inputClass} value={targetId} onChange={e => setTargetId(e.target.value)}>
-                <option value="">Select target batch...</option>
-                {otherBatches.map(b => (
-                  <option key={b._id} value={b._id}>{b.name} — {b.course} ({b.studentCount ?? 0} students)</option>
-                ))}
-              </select>
-            </div>
-          )}
-          <p className="text-[11px] text-gray-400">The student will be moved to the selected batch immediately.</p>
-        </div>
-        <div className="px-6 py-3.5 border-t border-gray-100 flex gap-2.5 justify-end">
-          <button className="px-5 py-2 rounded-[10px] bg-gray-100 text-gray-700 font-semibold text-[13px]" onClick={onClose}>Cancel</button>
-          {otherBatches.length > 0 && (
-            <button
-              disabled={!targetId || saving}
-              className="px-5 py-2 rounded-[10px] bg-orange-500 text-white font-semibold text-[13px] disabled:opacity-40"
-              onClick={handleShift}
-            >
-              {saving ? 'Shifting...' : 'Shift Student'}
             </button>
           )}
         </div>
@@ -264,8 +190,7 @@ export default function BatchDetailPage() {
   const [loading, setLoading]         = useState(true);
   const [error, setError]             = useState('');
   const [editMode, setEditMode]       = useState(false);
-  const [showAdd, setShowAdd]         = useState(false);
-  const [shiftTarget, setShiftTarget] = useState(null);
+  const [showAdd, setShowAdd]           = useState(false);
   const [removeTarget, setRemoveTarget] = useState(null);
   const [removing, setRemoving]       = useState(false);
 
@@ -433,9 +358,6 @@ export default function BatchDetailPage() {
                   </span>
                   {editMode && (
                     <div className="flex gap-2 ml-2 shrink-0">
-                      <button className="px-3 py-1.5 rounded-lg bg-orange-50 text-orange-600 font-semibold text-[12px] hover:bg-orange-100 transition-colors border border-orange-200" onClick={() => setShiftTarget(student)}>
-                        Shift
-                      </button>
                       <button className="px-3 py-1.5 rounded-lg bg-red-50 text-red-600 font-semibold text-[12px] hover:bg-red-100 transition-colors border border-red-200" onClick={() => setRemoveTarget(student)}>
                         Remove
                       </button>
@@ -449,7 +371,6 @@ export default function BatchDetailPage() {
       </div>
 
       {showAdd && <AddStudentModal batchId={id} onAdded={() => { setShowAdd(false); loadBatch(); }} onClose={() => setShowAdd(false)} />}
-      {shiftTarget && <ShiftStudentModal student={shiftTarget} fromBatchId={id} onShifted={() => { setShiftTarget(null); loadBatch(); }} onClose={() => setShiftTarget(null)} />}
       {removeTarget && <RemoveConfirmModal student={removeTarget} saving={removing} onConfirm={handleRemoveConfirm} onClose={() => setRemoveTarget(null)} />}
     </div>
   );
