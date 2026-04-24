@@ -6,7 +6,9 @@ import { useState, useRef, useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
+import { chatService } from '../../services/api';
 import OpsSidebar from './OpsSidebar';
+import BAvatar from 'boring-avatars';
 
 const PAGE_TITLES = {
   '/operations/dashboard':     'Platform Overview',
@@ -16,6 +18,7 @@ const PAGE_TITLES = {
   '/operations/reports':       'Reports',
   '/operations/notifications': 'Notifications',
   '/operations/profile':       'My Profile',
+  '/operations/communication': 'Communication',
 };
 
 const notifTypeConfig = {
@@ -38,9 +41,10 @@ function getInitials(name) {
 }
 
 export default function OpsLayout() {
-  const [collapsed, setCollapsed]       = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [notifOpen, setNotifOpen]       = useState(false);
+  const [collapsed, setCollapsed]             = useState(false);
+  const [dropdownOpen, setDropdownOpen]       = useState(false);
+  const [notifOpen, setNotifOpen]             = useState(false);
+  const [chatUnreadCount, setChatUnreadCount] = useState(0);
 
   const dropdownRef = useRef(null);
   const notifRef    = useRef(null);
@@ -51,6 +55,17 @@ export default function OpsLayout() {
   const navigate = useNavigate();
 
   const unreadCount  = opsNotifications.filter(n => !n.read).length;
+
+  // Fetch initial chat unread count
+  useEffect(() => {
+    if (!user?._id) return;
+    chatService.getConversations(user._id)
+      .then(r => {
+        const total = (r.data || []).reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+        setChatUnreadCount(total);
+      })
+      .catch(() => {});
+  }, [user?._id]);
   const recentNotifs = [...opsNotifications].slice(0, 5);
 
   useEffect(() => {
@@ -72,7 +87,7 @@ export default function OpsLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
-      <OpsSidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
+      <OpsSidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} chatUnreadCount={chatUnreadCount} />
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
         {/* Header */}
@@ -160,11 +175,11 @@ export default function OpsLayout() {
             {/* Avatar + profile dropdown */}
             <div className="relative" ref={dropdownRef}>
               <div
-                className="w-9 h-9 rounded-full bg-gradient-to-br from-ops-primary to-purple-400 text-white font-bold text-[13px] flex items-center justify-center cursor-pointer select-none"
+                className="w-9 h-9 rounded-full overflow-hidden cursor-pointer select-none"
                 title={user?.name}
                 onClick={() => { setDropdownOpen(o => !o); setNotifOpen(false); }}
               >
-                {getInitials(user?.name)}
+                <BAvatar size={36} name={user?.name || 'Ops'} variant="beam" />
               </div>
 
               {dropdownOpen && (
@@ -197,7 +212,7 @@ export default function OpsLayout() {
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto min-h-0 bg-gray-50">
-          <Outlet />
+          <Outlet context={{ setChatUnreadCount }} />
         </main>
       </div>
     </div>

@@ -7,6 +7,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import MentorSidebar from './MentorSidebar';
+import BAvatar from 'boring-avatars';
 
 const PAGE_TITLES = {
   '/mentor/dashboard':     'Dashboard',
@@ -73,7 +74,7 @@ export default function MentorLayout() {
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
       {/* Sidebar */}
-      <MentorSidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} />
+      <MentorSidebar collapsed={collapsed} onToggle={() => setCollapsed(!collapsed)} notifUnreadCount={unreadCount} />
 
       {/* Main area */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0 min-h-0">
@@ -165,11 +166,11 @@ export default function MentorLayout() {
             {/* Avatar + profile dropdown */}
             <div className="relative" ref={dropdownRef}>
               <div
-                className="w-9 h-9 rounded-full bg-gradient-to-br from-mentor-primary to-cyan-600 text-white font-bold text-[13px] flex items-center justify-center cursor-pointer select-none"
+                className="w-9 h-9 rounded-full overflow-hidden cursor-pointer select-none"
                 title={user?.name}
                 onClick={() => { setDropdownOpen(o => !o); setNotifOpen(false); }}
               >
-                {getInitials(user?.name)}
+                <BAvatar size={36} name={user?.name || 'Mentor'} variant="beam" />
               </div>
 
               {dropdownOpen && (

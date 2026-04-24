@@ -4,6 +4,7 @@
 
 import { useAuth } from '../../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import BAvatar from 'boring-avatars';
 
 const userIcon   = <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>;
 const mailIcon   = <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>;
@@ -33,15 +34,8 @@ export default function ProfilePage() {
     <div className="p-10 flex justify-center items-start min-h-full bg-gray-50">
       <div className="bg-white rounded-2xl shadow-card px-12 py-10 w-full max-w-[480px] flex flex-col items-center gap-4">
         {/* Avatar */}
-        <div
-          className="w-20 h-20 rounded-full text-white font-bold text-[28px] flex items-center justify-center mb-1"
-          style={{
-            background: isMentor
-              ? 'linear-gradient(135deg, #0d9488, #0891b2)'
-              : 'linear-gradient(135deg, #7c3aed, #a855f7)',
-          }}
-        >
-          {getInitials(user?.name)}
+        <div className="w-20 h-20 rounded-full overflow-hidden mb-1">
+          <BAvatar size={80} name={user?.name || 'User'} variant="beam" />
         </div>
 
         <h2 className="text-[22px] font-bold text-gray-900 m-0">{user?.name || 'Unknown User'}</h2>

@@ -35,6 +35,7 @@ import AddStudentPage     from './components/operations/students/AddStudentPage'
 import BatchesPage            from './components/operations/batches/BatchesPage';
 import BatchDetailPage        from './components/operations/batches/BatchDetailPage';
 import OpsNotificationsPage    from './components/operations/notifications/OpsNotificationsPage';
+import OpsCommunicationPage   from './components/operations/communication/OpsCommunicationPage';
 
 export default function App() {
   return (
@@ -87,6 +88,7 @@ export default function App() {
             <Route path="batches/:id"   element={<BatchDetailPage />} />
             <Route path="profile"        element={<ProfilePage />} />
             <Route path="notifications"  element={<OpsNotificationsPage />} />
+            <Route path="communication"  element={<OpsCommunicationPage />} />
             <Route path="reports" element={
               <div className="flex flex-col items-center justify-center h-full gap-3 text-gray-400 p-10">
                 <p className="text-5xl">📊</p>

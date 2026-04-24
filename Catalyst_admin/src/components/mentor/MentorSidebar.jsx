@@ -4,6 +4,7 @@
 
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import BAvatar from 'boring-avatars';
 import catalystLogo from '../../assets/catalyst-logo.png';
 
 const icons = {
@@ -41,12 +42,12 @@ const NAV_SECTIONS = [
   {
     label: 'ALERTS',
     items: [
-      { key: 'notifications', label: 'Notifications', path: '/mentor/notifications', icon: icons.notifications, color: '#ef4444', badge: 2 },
+      { key: 'notifications', label: 'Notifications', path: '/mentor/notifications', icon: icons.notifications, color: '#ef4444', badgeKey: 'notif' },
     ],
   },
 ];
 
-export default function MentorSidebar({ collapsed, onToggle }) {
+export default function MentorSidebar({ collapsed, onToggle, notifUnreadCount = 0 }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
@@ -54,6 +55,11 @@ export default function MentorSidebar({ collapsed, onToggle }) {
   const isActive = (path) => location.pathname.startsWith(path);
 
   const handleLogout = () => { logout(); navigate('/'); };
+
+  const getBadge = (badgeKey) => {
+    if (badgeKey === 'notif') return notifUnreadCount;
+    return 0;
+  };
 
   return (
     <aside
@@ -94,6 +100,7 @@ export default function MentorSidebar({ collapsed, onToggle }) {
             )}
             {section.items.map((item) => {
               const active = isActive(item.path);
+              const badge  = getBadge(item.badgeKey);
               return (
                 <button
                   key={item.key}
@@ -123,15 +130,14 @@ export default function MentorSidebar({ collapsed, onToggle }) {
                     </span>
                   )}
 
-                  {/* Badge */}
-                  {item.badge && !collapsed && (
+                  {badge > 0 && !collapsed && (
                     <span className="min-w-[20px] h-5 rounded-[10px] bg-red-500 text-white text-[11px] font-bold flex items-center justify-center px-1.5">
-                      {item.badge}
+                      {badge > 99 ? '99+' : badge}
                     </span>
                   )}
-                  {item.badge && collapsed && (
+                  {badge > 0 && collapsed && (
                     <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center">
-                      {item.badge}
+                      {badge > 9 ? '9+' : badge}
                     </span>
                   )}
                 </button>
@@ -144,8 +150,8 @@ export default function MentorSidebar({ collapsed, onToggle }) {
       {/* Footer */}
       <div className="px-3.5 py-3 border-t border-gray-100 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5 overflow-hidden">
-          <div className="w-[34px] h-[34px] rounded-full bg-gradient-to-br from-mentor-primary to-cyan-600 text-white font-bold text-[13px] flex items-center justify-center shrink-0">
-            {user?.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'U'}
+          <div className="w-[34px] h-[34px] rounded-full overflow-hidden shrink-0">
+            <BAvatar size={34} name={user?.name || 'Mentor'} variant="beam" />
           </div>
           {!collapsed && (
             <div className="overflow-hidden">

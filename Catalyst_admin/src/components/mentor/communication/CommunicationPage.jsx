@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { chatService, studentService } from '../../../services/api';
 import { connectSocket, disconnectSocket } from '../../../services/socket';
+import BAvatar from 'boring-avatars';
+import EmojiPicker from 'emoji-picker-react';
 
 const sendIcon = (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -9,9 +11,15 @@ const sendIcon = (
   </svg>
 );
 
-function getInitials(name = '') {
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-}
+const paperclipIcon = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+  </svg>
+);
+
+const xIcon = (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+);
 
 function formatTime(ts) {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -27,37 +35,53 @@ function formatDate(ts) {
   return d.toLocaleDateString();
 }
 
-const EMOJI_TABS = [
-  { icon: '😊', emojis: ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','😉','😊','😇','🥰','😍','🤩','😘','😋','😛','😜','🤪','😝','🤑','🤗','😐','🙄','😏','😒','😞','😔','😕','🙁','😣','😩','🥺','😢','😭','😤','😠','😡','😳','😱','😨'] },
-  { icon: '👋', emojis: ['👋','🤚','✋','🖖','👌','✌️','🤞','🤟','🤙','👈','👉','👆','👇','👍','👎','✊','👊','👏','🙌','🤝','🙏','💪'] },
-  { icon: '❤️', emojis: ['❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝'] },
-  { icon: '🎉', emojis: ['🎉','🎊','🎈','🎁','🏆','🥇','🌟','⭐','✨','💫','🔥','💯','🎯','🚀','💡','📚','📝','✅','❌','💬','🔔','💰','🎓'] },
-  { icon: '🐶', emojis: ['🐶','🐱','🐭','🐰','🦊','🐻','🐼','🐯','🦁','🐮','🐷','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🦄','🐴'] },
-];
-
-function EmojiPicker({ onSelect }) {
-  const [tab, setTab] = useState(0);
-  return (
-    <div className="absolute bottom-[calc(100%+6px)] left-0 z-50 bg-white border border-gray-200 rounded-xl shadow-lg w-[272px] overflow-hidden">
-      <div className="flex border-b border-gray-100 px-1 pt-1 gap-0.5">
-        {EMOJI_TABS.map((t, i) => (
-          <button key={i} onClick={() => setTab(i)}
-            className={`flex-1 py-1.5 text-[17px] rounded-lg transition-colors ${i === tab ? 'bg-gray-100' : 'hover:bg-gray-50'}`}>
-            {t.icon}
-          </button>
-        ))}
-      </div>
-      <div className="grid grid-cols-8 gap-0.5 p-2 max-h-[156px] overflow-y-auto">
-        {EMOJI_TABS[tab].emojis.map(e => (
-          <button key={e} onClick={() => onSelect(e)}
-            className="text-[18px] leading-none p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-center">
-            {e}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
+function formatBytes(bytes) {
+  const b = parseInt(bytes) || 0;
+  if (b < 1024) return `${b} B`;
+  if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`;
+  return `${(b / 1048576).toFixed(1)} MB`;
 }
+
+function MessageContent({ text }) {
+  if (!text) return null;
+
+  if (text.startsWith('[IMG:')) {
+    const end = text.indexOf(']', 5);
+    if (end === -1) return <span className="break-words">{text}</span>;
+    const dataUrl = text.slice(5, end);
+    const caption = text.slice(end + 1).trim();
+    return (
+      <div>
+        <img src={dataUrl} alt="attachment" className="max-w-full rounded-lg max-h-[200px] object-contain cursor-pointer block" onClick={() => window.open(dataUrl, '_blank')} />
+        {caption && <p className="text-[13px] mt-1 break-words">{caption}</p>}
+      </div>
+    );
+  }
+
+  if (text.startsWith('[FILE:')) {
+    const end = text.indexOf(']', 6);
+    if (end === -1) return <span className="break-words">{text}</span>;
+    const [filename, sizeStr] = text.slice(6, end).split('||');
+    const caption = text.slice(end + 1).trim();
+    const ext = filename?.split('.').pop()?.toLowerCase() || '';
+    const icon = ext === 'pdf' ? '📄' : ['doc','docx'].includes(ext) ? '📝' : ext === 'zip' ? '🗜️' : '📎';
+    return (
+      <div>
+        <div className="flex items-center gap-2 bg-black/[0.06] rounded-lg px-2.5 py-2">
+          <span className="text-lg leading-none">{icon}</span>
+          <div className="min-w-0">
+            <p className="text-[13px] font-medium leading-tight truncate">{filename}</p>
+            <p className="text-[11px] opacity-60">{formatBytes(sizeStr)}</p>
+          </div>
+        </div>
+        {caption && <p className="text-[13px] mt-1 break-words">{caption}</p>}
+      </div>
+    );
+  }
+
+  return <span className="break-words">{text}</span>;
+}
+
 
 export default function CommunicationPage() {
   const { user } = useAuth();
@@ -71,15 +95,16 @@ export default function CommunicationPage() {
   const [typing, setTyping]               = useState(false);
   const [onlineUsers, setOnlineUsers]     = useState(new Set());
   const [showEmoji, setShowEmoji]         = useState(false);
+  const [attachedFile, setAttachedFile]   = useState(null);
 
   const messagesEndRef = useRef(null);
   const socketRef      = useRef(null);
   const selectedRef    = useRef(null);
   const typingTimer    = useRef(null);
+  const fileInputRef   = useRef(null);
 
   useEffect(() => { selectedRef.current = selected; }, [selected]);
 
-  // Socket setup — token from localStorage passed in handshake auth
   useEffect(() => {
     const socket = connectSocket();
     socketRef.current = socket;
@@ -132,7 +157,6 @@ export default function CommunicationPage() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Load conversations + assigned students on mount, merge them
   useEffect(() => {
     if (!user?._id) return;
     Promise.all([
@@ -150,7 +174,6 @@ export default function CommunicationPage() {
     });
   }, [user?._id]);
 
-  // Load messages when selected changes
   useEffect(() => {
     if (!selected || !user?._id) return;
     setMessages([]);
@@ -164,12 +187,10 @@ export default function CommunicationPage() {
     ));
   }, [selected?.userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Debounced search
   useEffect(() => {
     if (!search.trim()) { setSearchResults([]); return; }
     const t = setTimeout(() => {
@@ -178,26 +199,54 @@ export default function CommunicationPage() {
     return () => clearTimeout(t);
   }, [search]);
 
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+
+    if (file.type.startsWith('image/') && file.size <= 500 * 1024) {
+      const reader = new FileReader();
+      reader.onload = (ev) => setAttachedFile({ name: file.name, type: file.type, size: file.size, dataUrl: ev.target.result });
+      reader.readAsDataURL(file);
+    } else {
+      setAttachedFile({ name: file.name, type: file.type, size: file.size, dataUrl: null });
+    }
+  };
+
   const handleSend = () => {
-    if (!input.trim() || !selected || !user?._id) return;
+    if (!input.trim() && !attachedFile) return;
+    if (!selected || !user?._id) return;
+
+    let messageContent = input.trim();
+
+    if (attachedFile) {
+      if (attachedFile.type.startsWith('image/') && attachedFile.dataUrl) {
+        messageContent = `[IMG:${attachedFile.dataUrl}]${messageContent ? '\n' + messageContent : ''}`;
+      } else {
+        messageContent = `[FILE:${attachedFile.name}||${attachedFile.size}||${attachedFile.type}]${messageContent ? '\n' + messageContent : ''}`;
+      }
+      setAttachedFile(null);
+    }
+
     const tempId = `temp_${Date.now()}`;
     const optimistic = {
       _id: tempId, senderId: user._id, receiverId: selected.userId,
-      message: input.trim(), timestamp: new Date().toISOString(), read: false,
+      message: messageContent, timestamp: new Date().toISOString(), read: false,
     };
     setMessages(p => [...p, optimistic]);
     socketRef.current?.emit('send_message', {
       senderId: user._id, receiverId: selected.userId,
-      message: input.trim(), tempId,
+      message: messageContent, tempId,
     });
+    const preview = attachedFile ? (attachedFile.type.startsWith('image/') ? '📷 Image' : `📎 ${attachedFile.name}`) : messageContent;
     setConversations(p => {
       const exists = p.find(c => c.userId?.toString() === selected.userId?.toString());
       if (exists) return p.map(c =>
         c.userId?.toString() === selected.userId?.toString()
-          ? { ...c, lastMessage: input.trim(), lastTime: new Date().toISOString() }
+          ? { ...c, lastMessage: preview, lastTime: new Date().toISOString() }
           : c
       );
-      return [{ userId: selected.userId, name: selected.name, email: selected.email, lastMessage: input.trim(), lastTime: new Date().toISOString(), unreadCount: 0 }, ...p];
+      return [{ userId: selected.userId, name: selected.name, email: selected.email, lastMessage: preview, lastTime: new Date().toISOString(), unreadCount: 0 }, ...p];
     });
     setInput('');
   };
@@ -224,6 +273,16 @@ export default function CommunicationPage() {
     (acc[d] = acc[d] || []).push(msg);
     return acc;
   }, {});
+
+  const lastMsgPreview = (msg) => {
+    if (!msg) return '';
+    if (msg.startsWith('[IMG:')) return '📷 Image';
+    if (msg.startsWith('[FILE:')) {
+      const end = msg.indexOf(']', 6);
+      return `📎 ${end > -1 ? msg.slice(6, end).split('||')[0] : 'File'}`;
+    }
+    return msg;
+  };
 
   return (
     <div className="p-6 flex flex-col gap-4 fade-in">
@@ -265,11 +324,8 @@ export default function CommunicationPage() {
                   }`}
                 >
                   <div className="relative shrink-0">
-                    <div
-                      className="w-[34px] h-[34px] rounded-full text-white font-bold text-xs flex items-center justify-center"
-                      style={{ background: `hsl(${(contact.name?.charCodeAt(0) || 0) * 15}, 55%, 48%)` }}
-                    >
-                      {getInitials(contact.name)}
+                    <div className="w-[34px] h-[34px] rounded-full overflow-hidden">
+                      <BAvatar size={34} name={contact.name || 'User'} variant="beam" />
                     </div>
                     {onlineUsers.has(contact.userId?.toString()) && (
                       <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white absolute bottom-0 right-0" />
@@ -278,7 +334,7 @@ export default function CommunicationPage() {
                   <div className="flex-1 overflow-hidden">
                     <p className="text-[13px] font-semibold text-gray-900 whitespace-nowrap overflow-hidden text-ellipsis">{contact.name}</p>
                     <p className="text-[11px] text-gray-400 whitespace-nowrap overflow-hidden text-ellipsis">
-                      {contact.lastMessage || contact.email}
+                      {lastMsgPreview(contact.lastMessage) || contact.email}
                     </p>
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
@@ -302,12 +358,9 @@ export default function CommunicationPage() {
           <div className="flex-1 flex flex-col">
             {/* Header */}
             <div className="px-4 py-3.5 border-b border-gray-100 flex items-center gap-2.5">
-              <div className="relative">
-                <div
-                  className="w-[34px] h-[34px] rounded-full text-white font-bold text-xs flex items-center justify-center"
-                  style={{ background: `hsl(${(selected.name?.charCodeAt(0) || 0) * 15}, 55%, 48%)` }}
-                >
-                  {getInitials(selected.name)}
+              <div className="relative shrink-0">
+                <div className="w-[34px] h-[34px] rounded-full overflow-hidden">
+                  <BAvatar size={34} name={selected.name || 'User'} variant="beam" />
                 </div>
                 {onlineUsers.has(selected.userId?.toString()) && (
                   <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white absolute bottom-0 right-0" />
@@ -340,12 +393,12 @@ export default function CommunicationPage() {
                     return (
                       <div key={msg._id} className={`flex mb-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[65%] flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
-                          <div className={`px-3.5 py-2 text-[13px] leading-relaxed break-words
+                          <div className={`px-3.5 py-2 text-[13px] leading-relaxed
                             ${isMe
                               ? 'bg-[#d9fdd3] text-gray-900 rounded-[10px] rounded-tr-[2px]'
                               : 'bg-white text-gray-900 rounded-[10px] rounded-tl-[2px] shadow-sm'
                             }`}>
-                            {msg.message}
+                            <MessageContent text={msg.message} />
                           </div>
                           <p className="text-[10px] text-gray-400 mt-[2px] flex items-center gap-1 px-1">
                             {formatTime(msg.timestamp)}
@@ -369,8 +422,41 @@ export default function CommunicationPage() {
               <div ref={messagesEndRef} />
             </div>
 
+            {/* File preview bar */}
+            {attachedFile && (
+              <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 flex items-center gap-2.5">
+                {attachedFile.dataUrl ? (
+                  <img src={attachedFile.dataUrl} alt="preview" className="w-12 h-12 rounded-lg object-cover shrink-0" />
+                ) : (
+                  <div className="w-10 h-10 bg-gray-200 rounded-lg flex items-center justify-center shrink-0">
+                    <span className="text-gray-500">{paperclipIcon}</span>
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-medium text-gray-800 truncate">{attachedFile.name}</p>
+                  <p className="text-[11px] text-gray-500">{formatBytes(attachedFile.size)}</p>
+                </div>
+                <button onClick={() => setAttachedFile(null)} className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300 transition-colors shrink-0">
+                  {xIcon}
+                </button>
+              </div>
+            )}
+
             {/* Input */}
             <div className="px-4 py-3 border-t border-gray-100 flex gap-2 bg-white items-center">
+              {/* Hidden file input */}
+              <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileSelect} />
+
+              {/* Attach button */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-10 h-10 rounded-[10px] border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors shrink-0"
+                title="Attach file"
+              >
+                {paperclipIcon}
+              </button>
+
+              {/* Emoji button */}
               <div className="relative shrink-0">
                 <button
                   onClick={() => setShowEmoji(p => !p)}
@@ -382,10 +468,19 @@ export default function CommunicationPage() {
                 {showEmoji && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowEmoji(false)} />
-                    <EmojiPicker onSelect={e => setInput(p => p + e)} />
+                    <div className="absolute bottom-[calc(100%+6px)] left-0 z-50">
+                      <EmojiPicker
+                        onEmojiClick={(emojiData) => { setInput(p => p + emojiData.emoji); setShowEmoji(false); }}
+                        width={300}
+                        height={380}
+                        previewConfig={{ showPreview: false }}
+                        searchPlaceholder="Search emoji..."
+                      />
+                    </div>
                   </>
                 )}
               </div>
+
               <input
                 className="flex-1 px-3.5 py-2.5 rounded-[10px] border-[1.5px] border-gray-200 text-[13px] text-gray-900 outline-none focus:border-teal-500 transition-colors"
                 placeholder={`Message ${selected.name}...`}
@@ -395,7 +490,7 @@ export default function CommunicationPage() {
               />
               <button
                 onClick={handleSend}
-                style={{ opacity: input.trim() ? 1 : 0.45 }}
+                style={{ opacity: (input.trim() || attachedFile) ? 1 : 0.45 }}
                 className="w-10 h-10 rounded-[10px] bg-teal-600 text-white flex items-center justify-center shrink-0 transition-opacity hover:opacity-90"
               >
                 {sendIcon}
