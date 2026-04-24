@@ -44,7 +44,7 @@ export function AuthProvider({ children }) {
 
       return { success: true, role: data.data.role };
 
-    } catch (error) {
+    } catch (_error) {
       return { success: false, error: 'Server unreachable. Is the backend running?' };
     }
   };
@@ -71,7 +71,7 @@ export function AuthProvider({ children }) {
 
       return { success: true, role: data.data.role };
 
-    } catch (error) {
+    } catch (_error) {
       return { success: false, error: 'Server unreachable. Is the backend running?' };
     }
   };
@@ -89,4 +89,5 @@ export function AuthProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);
