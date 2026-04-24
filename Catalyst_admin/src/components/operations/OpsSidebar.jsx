@@ -117,7 +117,7 @@ export default function OpsSidebar({ collapsed, onToggle }) {
       <div className="px-3.5 py-3 border-t border-gray-100 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2.5 overflow-hidden">
           <div className="w-[34px] h-[34px] rounded-full bg-gradient-to-br from-ops-primary to-purple-400 text-white font-bold text-[13px] flex items-center justify-center shrink-0">
-            {user?.avatar || 'U'}
+            {user?.name ? user.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2) : 'U'}
           </div>
           {!collapsed && (
             <div className="overflow-hidden">
