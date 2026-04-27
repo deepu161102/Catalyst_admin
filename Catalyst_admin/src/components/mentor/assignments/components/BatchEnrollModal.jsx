@@ -19,8 +19,12 @@ export default function BatchEnrollModal({ batches, enrolledBatches = [], onEnro
     if (selected.length > 0) onEnroll(selected);
   };
 
-  const availableBatches = batches.filter((b) => !enrolledBatches.includes(b.id));
-  const alreadyEnrolled  = batches.filter((b) =>  enrolledBatches.includes(b.id));
+  // enrolledBatches can be plain IDs or populated objects — normalise to strings
+  const enrolledIds = (enrolledBatches || []).map((b) =>
+    typeof b === 'object' ? String(b._id || b.id) : String(b)
+  );
+  const availableBatches = batches.filter((b) => !enrolledIds.includes(String(b.id)));
+  const alreadyEnrolled  = batches.filter((b) =>  enrolledIds.includes(String(b.id)));
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[1000] p-4">

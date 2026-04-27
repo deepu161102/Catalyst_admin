@@ -239,13 +239,13 @@ export default function AssignmentsPage() {
 
   // ── Load from backend ──────────────────────────────────────
   const loadAssignments = useCallback(async () => {
-    if (!user?.id) return;
+    if (!user?._id) return;
     try {
       setLoading(true);
       const [aRes, sRes, bRes] = await Promise.all([
-        assignmentService.getByMentor(user.id),
-        studentService.getByMentor(user.id).catch(() => ({ data: [] })),
-        batchService.getAll({ mentorId: user.id }).catch(() => ({ data: [] })),
+        assignmentService.getByMentor(user._id),
+        studentService.getByMentor(user._id).catch(() => ({ data: [] })),
+        batchService.getAll({ mentorId: user._id }).catch(() => ({ data: [] })),
       ]);
       setAssignments((aRes.data || []).map(normalise));
       // Shape students for the Step 1 picker
@@ -268,13 +268,22 @@ export default function AssignmentsPage() {
     } finally {
       setLoading(false);
     }
-  }, [user?.id]);
+  }, [user?._id]);
 
   useEffect(() => { loadAssignments(); }, [loadAssignments]);
 
   // ── CRUD ──────────────────────────────────────────────────
-  const openCreate = () => { setEditing(newAssignment(user?.id)); setView('builder'); };
-  const openEdit   = (a)  => { setEditing(a); setView('builder'); };
+  const openCreate = () => { setEditing(newAssignment(user?._id)); setView('builder'); };
+
+  const openEdit = async (a) => {
+    try {
+      const res = await assignmentService.getById(a._id);
+      setEditing(normalise(res.data));
+      setView('builder');
+    } catch (e) {
+      setError(e.message);
+    }
+  };
 
   const handleSave = async (saved) => {
     try {
@@ -282,14 +291,15 @@ export default function AssignmentsPage() {
       setError('');
       const payload = {
         ...saved,
-        mentorId: user?.id,
+        mentorId: user?._id,
         sections: saved.sections.map((s) => ({
           sid:  s.sid || s.id,
           name: s.name,
           modules: (s.modules || []).map((m) => ({
-            mid:       m.mid || m.id,
-            number:    m.number,
-            timeLimit: m.timeLimit,
+            mid:               m.mid || m.id,
+            number:            m.number,
+            timeLimit:         m.timeLimit,
+            calculatorAllowed: m.calculatorAllowed || false,
             questions: (m.questions || []).map((q) => ({
               qid:           q.qid || q.id,
               number:        q.number,
@@ -351,7 +361,12 @@ export default function AssignmentsPage() {
   const handleEnrollBatch = async (selectedBatchIds) => {
     if (!enrollFor) return;
     try {
-      const res = await assignmentService.enrollBatches(enrollFor._id, selectedBatchIds);
+      // Merge with already-enrolled batches (handle both populated objects and plain IDs)
+      const existingIds = (enrollFor.enrolledBatches || []).map((b) =>
+        typeof b === 'object' ? String(b._id || b.id) : String(b)
+      );
+      const merged = [...new Set([...existingIds, ...selectedBatchIds.map(String)])];
+      const res = await assignmentService.enrollBatches(enrollFor._id, merged);
       const updated = normalise(res.data);
       setAssignments((prev) => prev.map((a) => (a._id === updated._id ? updated : a)));
       if (progressFor?._id === updated._id) setProgressFor(updated);
