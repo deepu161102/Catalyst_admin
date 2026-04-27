@@ -39,18 +39,18 @@ function computeTotals(data) {
 // ════════════════════════════════════════════════════════════
 // STEP 1 — Assignment Info
 // ════════════════════════════════════════════════════════════
-function StepInfo({ data, onChange, students }) {
+function StepInfo({ data, onChange }) {
   const set = (key, val) => onChange({ ...data, [key]: val });
 
-  const toggleStudent = (id) => {
-    const current = data.assignedTo || [];
-    onChange({
-      ...data,
-      assignedTo: current.includes(id)
-        ? current.filter((s) => s !== id)
-        : [...current, id],
-    });
-  };
+  // const toggleStudent = (id) => {
+  //   const current = data.assignedTo || [];
+  //   onChange({
+  //     ...data,
+  //     assignedTo: current.includes(id)
+  //       ? current.filter((s) => s !== id)
+  //       : [...current, id],
+  //   });
+  // };
 
   return (
     <div className="max-w-2xl mx-auto space-y-7">
