@@ -6,15 +6,59 @@
 // report (with explanations) — these are hidden during the test.
 // ============================================================
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { SECTION_META } from './components/sectionMeta';
+
+function getMasteryLevel(pct) {
+  if (pct >= 85) return { label: 'MASTER',       color: '#2563eb', bg: '#dbeafe', bar: '#10b981' };
+  if (pct >= 70) return { label: 'ELITE',        color: '#0891b2', bg: '#cffafe', bar: '#06b6d4' };
+  if (pct >= 55) return { label: 'EXPERT',       color: '#7c3aed', bg: '#ede9fe', bar: '#8b5cf6' };
+  if (pct >= 40) return { label: 'ADVANCED',     color: '#d97706', bg: '#fef3c7', bar: '#f59e0b' };
+  if (pct >= 25) return { label: 'INTERMEDIATE', color: '#ea580c', bg: '#ffedd5', bar: '#f97316' };
+  return           { label: 'NOVICE',            color: '#ef4444', bg: '#fee2e2', bar: '#d1d5db' };
+}
+
+function getTopicGroupName(section, moduleNum) {
+  const name = section.name.toLowerCase();
+  const isRW = name.includes('reading') || name.includes('writing') || section.id === 'rw';
+  if (isRW) return moduleNum === 1 ? 'Writing Mastery' : 'Reading Mastery';
+  return 'Mathematics Mastery';
+}
+
+function computeTopicMastery(assignment, attempt) {
+  const result = {};
+  (assignment.sections || []).forEach((section) => {
+    const sectionResult = attempt.sectionResults?.find((sr) => sr.sectionId === section.id);
+    (section.modules || []).forEach((mod) => {
+      const groupName    = getTopicGroupName(section, mod.number);
+      const moduleResult = sectionResult?.modules.find((m) => m.moduleNumber === mod.number);
+      if (!result[groupName]) result[groupName] = {};
+      (mod.questions || []).forEach((q) => {
+        const topic = (q.topic || '').trim() || null;
+        if (!topic) return;
+        if (!result[groupName][topic]) result[groupName][topic] = { correct: 0, total: 0, score: 0, maxScore: 0 };
+        const studentAnswer = moduleResult?.answers?.[q.id];
+        const isCorrect     = studentAnswer && studentAnswer === q.correctAnswer;
+        result[groupName][topic].total++;
+        result[groupName][topic].maxScore += (q.score || 1);
+        if (isCorrect) { result[groupName][topic].correct++; result[groupName][topic].score += (q.score || 1); }
+      });
+      if (Object.keys(result[groupName]).length === 0) delete result[groupName];
+    });
+  });
+  return result;
+}
 
 // ── Score report modal ────────────────────────────────────────
 function StudentReportModal({ attempt, assignment, onClose }) {
+  const [view, setView] = useState('questions'); // 'questions' | 'topics'
   const [activeSection, setActiveSection] = useState(
     attempt.sectionResults[0]?.sectionId || 'rw',
   );
   const [activeModule, setActiveModule] = useState(1);
+
+  const topicMastery = useMemo(() => computeTopicMastery(assignment, attempt), [assignment, attempt]);
+  const hasTopics    = Object.keys(topicMastery).length > 0;
 
   const sectionResult = attempt.sectionResults.find((s) => s.sectionId === activeSection);
   const moduleResult  = sectionResult?.modules.find((m) => m.moduleNumber === activeModule);
@@ -76,8 +120,29 @@ function StudentReportModal({ attempt, assignment, onClose }) {
           </div>
         </div>
 
-        {/* Section + module tabs */}
-        <div className="shrink-0 border-b border-gray-100 bg-gray-50">
+        {/* View toggle */}
+        <div className="shrink-0 border-b border-gray-100 bg-white px-5 pt-3 flex gap-1">
+          {[
+            { key: 'questions', label: 'Questions' },
+            ...(hasTopics ? [{ key: 'topics', label: 'Topic Mastery' }] : []),
+          ].map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setView(t.key)}
+              className="px-4 py-1.5 rounded-t-lg text-[12px] font-bold border-b-2 transition-all"
+              style={
+                view === t.key
+                  ? { borderColor: '#4f46e5', color: '#4f46e5', background: '#fff' }
+                  : { borderColor: 'transparent', color: '#9ca3af' }
+              }
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Section + module tabs (only in questions view) */}
+        <div className={`shrink-0 border-b border-gray-100 bg-gray-50 ${view !== 'questions' ? 'hidden' : ''}`}>
           {/* Section tabs */}
           <div className="flex gap-1 px-5 pt-3">
             {attempt.sectionResults.map((sr) => {
@@ -143,8 +208,51 @@ function StudentReportModal({ attempt, assignment, onClose }) {
           )}
         </div>
 
+        {/* Topic Mastery view */}
+        {view === 'topics' && (
+          <div className="flex-1 overflow-y-auto p-5 space-y-4">
+            {Object.entries(topicMastery).map(([groupName, topics]) => (
+              <div key={groupName} className="rounded-xl overflow-hidden border border-gray-200">
+                <div className="bg-gray-800 px-4 py-3">
+                  <p className="text-sm font-bold text-white">{groupName}</p>
+                </div>
+                <div className="grid grid-cols-[1fr_auto_160px] bg-gray-700 px-4 py-2">
+                  <span className="text-[10px] font-extrabold text-gray-300 uppercase tracking-widest">Topics</span>
+                  <span className="text-[10px] font-extrabold text-gray-300 uppercase tracking-widest text-center px-6">Mastery Level</span>
+                  <span className="text-[10px] font-extrabold text-gray-300 uppercase tracking-widest text-right">Score</span>
+                </div>
+                {Object.entries(topics).map(([topic, data]) => {
+                  const pct     = data.maxScore > 0 ? Math.round((data.score / data.maxScore) * 100) : 0;
+                  const mastery = getMasteryLevel(pct);
+                  return (
+                    <div key={topic} className="grid grid-cols-[1fr_auto_160px] items-center px-4 py-3 border-t border-gray-100 bg-white">
+                      <p className="text-[13px] text-gray-700">{topic}</p>
+                      <span
+                        className="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full mx-6"
+                        style={{ background: mastery.bg, color: mastery.color }}
+                      >
+                        {mastery.label}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full rounded-full" style={{ width: `${pct}%`, background: mastery.bar }} />
+                        </div>
+                        {pct > 0 && (
+                          <span className="text-[10px] font-bold shrink-0 w-8 text-right" style={{ color: mastery.bar }}>
+                            {pct}%
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Question-level breakdown */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-3">
+        <div className={`flex-1 overflow-y-auto p-5 space-y-3 ${view !== 'questions' ? 'hidden' : ''}`}>
           {/* Module meta bar */}
           {moduleResult && assignModule && (
             <div
@@ -200,14 +308,21 @@ function StudentReportModal({ attempt, assignment, onClose }) {
                   >
                     {q.number || idx + 1}
                   </div>
-                  <p
-                    className="flex-1 text-[13px] font-semibold truncate"
-                    style={{
-                      color: notAnswered ? '#6b7280' : isCorrect ? '#065f46' : '#991b1b',
-                    }}
-                  >
-                    {q.title || 'Untitled question'}
-                  </p>
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className="text-[13px] font-semibold truncate"
+                      style={{
+                        color: notAnswered ? '#6b7280' : isCorrect ? '#065f46' : '#991b1b',
+                      }}
+                    >
+                      {q.title || 'Untitled question'}
+                    </p>
+                    {q.topic && (
+                      <span className="inline-flex mt-0.5 text-[10px] font-semibold text-violet-600 bg-violet-50 border border-violet-200 rounded-full px-2 py-0.5">
+                        {q.topic}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {notAnswered ? (
                       <span className="text-[11px] font-bold text-gray-400 bg-gray-200 px-2 py-0.5 rounded-full">

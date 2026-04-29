@@ -64,15 +64,16 @@ export default function AddStudentPage() {
     setSaving(true);
     setApiError('');
     try {
-      await studentService.create({
+      const res = await studentService.create({
         name:     form.name.trim(),
         email:    form.email.trim().toLowerCase(),
         phone:    form.phone.trim() || undefined,
         batchId:  form.batchId || undefined,
         password: form.password,
       });
-      setSuccess(true);
-      setTimeout(() => navigate('/operations/students'), 2000);
+      // Backend returns `promoted: true` when a guest account was upgraded
+      setSuccess(res.promoted ? 'promoted' : 'created');
+      setTimeout(() => navigate('/operations/students'), 2500);
     } catch (err) {
       setApiError(err.message);
     } finally {
@@ -81,11 +82,18 @@ export default function AddStudentPage() {
   };
 
   if (success) {
+    const promoted = success === 'promoted';
     return (
       <div className="p-16 flex flex-col items-center gap-4 text-center">
-        <div className="text-[64px]">🎉</div>
-        <h2 className="text-[22px] font-extrabold text-gray-900">Student Added Successfully!</h2>
-        <p className="text-gray-500">Redirecting you back to the students list...</p>
+        <div className="text-[64px]">{promoted ? '⬆️' : '🎉'}</div>
+        <h2 className="text-[22px] font-extrabold text-gray-900">
+          {promoted ? 'Guest Account Upgraded!' : 'Student Added Successfully!'}
+        </h2>
+        <p className="text-gray-500">
+          {promoted
+            ? 'The existing guest account has been promoted to a full student account.'
+            : 'Redirecting you back to the students list...'}
+        </p>
       </div>
     );
   }

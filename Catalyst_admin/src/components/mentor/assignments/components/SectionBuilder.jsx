@@ -20,6 +20,7 @@ function makeBlankQuestion(number) {
     correctAnswer: '',
     explanation: '',
     score: 1,
+    topic: '',
   };
 }
 

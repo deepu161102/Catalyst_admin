@@ -35,6 +35,7 @@ import AddStudentPage     from './components/operations/students/AddStudentPage'
 import BatchesPage            from './components/operations/batches/BatchesPage';
 import BatchDetailPage        from './components/operations/batches/BatchDetailPage';
 import OpsNotificationsPage    from './components/operations/notifications/OpsNotificationsPage';
+import OpsExploreTestsPage    from './components/operations/explore-tests/OpsExploreTestsPage';
 
 export default function App() {
   return (
@@ -85,6 +86,7 @@ export default function App() {
             <Route path="students/add"  element={<AddStudentPage />} />
             <Route path="batches"       element={<BatchesPage />} />
             <Route path="batches/:id"   element={<BatchDetailPage />} />
+            <Route path="explore-tests"  element={<OpsExploreTestsPage />} />
             <Route path="profile"        element={<ProfilePage />} />
             <Route path="notifications"  element={<OpsNotificationsPage />} />
             <Route path="reports" element={

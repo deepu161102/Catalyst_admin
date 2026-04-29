@@ -73,7 +73,7 @@ function PreviewTable({ rows }) {
       <table className="w-full text-[12px] border-collapse">
         <thead className="sticky top-0 z-10">
           <tr className="bg-gray-50 border-b border-gray-200">
-            {['#', 'Mod', 'Title', 'A', 'B', 'C', 'D', 'Ans', 'Score', 'Status'].map((h) => (
+            {['#', 'Mod', 'Topic', 'Title', 'A', 'B', 'C', 'D', 'Ans', 'Score', 'Status'].map((h) => (
               <th key={h} className="px-3 py-2.5 text-left font-extrabold text-gray-500 uppercase tracking-wide whitespace-nowrap">
                 {h}
               </th>
@@ -93,6 +93,11 @@ function PreviewTable({ rows }) {
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-gray-100 text-gray-600">
                   M{row.question?.module ?? row.raw.module ?? 1}
                 </span>
+              </td>
+              <td className="px-3 py-2 max-w-[120px]">
+                <p className="truncate text-[11px] font-medium text-violet-600">
+                  {row.raw.topic || <span className="text-gray-300 italic">—</span>}
+                </p>
               </td>
               <td className="px-3 py-2 max-w-[180px]">
                 <p className="truncate font-semibold text-gray-800">
@@ -236,7 +241,7 @@ export default function BulkUploadModal({ sectionName, onImport, onClose }) {
                 <div>
                   <strong>Required columns:</strong> title, choice_a, choice_b, choice_c, choice_d, correct_answer
                   &nbsp;·&nbsp;
-                  <strong>Optional:</strong> description, explanation, score (defaults to 1), module (<strong>1</strong> or <strong>2</strong>, defaults to 1)
+                  <strong>Optional:</strong> description, explanation, score (defaults to 1), module (<strong>1</strong> or <strong>2</strong>), topic (e.g. "Linear Equations")
                   &nbsp;·&nbsp;
                   correct_answer must be exactly <strong>A</strong>, <strong>B</strong>, <strong>C</strong>, or <strong>D</strong>
                 </div>

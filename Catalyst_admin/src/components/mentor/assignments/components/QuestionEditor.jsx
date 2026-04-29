@@ -109,6 +109,20 @@ export default function QuestionEditor({ question: initial, sectionMeta, onSave,
             />
           </div>
 
+          {/* Topic */}
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-extrabold text-gray-500 uppercase tracking-widest">
+              Topic
+            </label>
+            <input
+              type="text"
+              value={q.topic || ''}
+              onChange={(e) => set('topic', e.target.value)}
+              placeholder="e.g. Linear Equations, Data Analysis, Equivalent Expressions…"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 text-[13px] text-gray-900 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all"
+            />
+          </div>
+
           {/* Description / passage (rich text) */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">

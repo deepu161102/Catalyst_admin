@@ -4,19 +4,58 @@ import { studentService, mentorService } from '../../../services/api';
 
 const inputClass = 'px-3 py-2 rounded-lg border-[1.5px] border-gray-200 text-[13px] outline-none bg-white text-gray-700';
 
+function GrantAccessModal({ student, onConfirm, onClose, loading }) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden">
+        <div className="px-6 py-5 border-b border-gray-100">
+          <h3 className="text-base font-bold text-gray-900">Grant Full Access</h3>
+          <p className="text-[13px] text-gray-500 mt-1">
+            This will convert <strong>{student.name}</strong> from a guest user to an active student.
+          </p>
+        </div>
+        <div className="px-6 py-4 bg-amber-50 border-b border-amber-100">
+          <p className="text-[12px] text-amber-700 font-medium">
+            The student will gain access to all platform features: sessions, slots, communication, and practice content.
+            Make sure payment has been confirmed before granting access.
+          </p>
+        </div>
+        <div className="flex gap-2.5 px-6 py-4">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2 rounded-xl text-sm font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="flex-1 py-2 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 transition-colors"
+          >
+            {loading ? 'Granting…' : 'Grant Access'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function OpsStudentsPage() {
   const navigate = useNavigate();
-  const [students, setStudents] = useState([]);
-  const [mentors, setMentors]   = useState([]);
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState('');
+  const [students, setStudents]     = useState([]);
+  const [mentors, setMentors]       = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState('');
+  const [grantTarget, setGrantTarget] = useState(null);
+  const [grantLoading, setGrantLoading] = useState(false);
 
   const [search, setSearch]             = useState('');
   const [filterMentor, setFilterMentor] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterCourse, setFilterCourse] = useState('all');
+  const [filterType, setFilterType]     = useState('all'); // 'all' | 'guest' | 'student'
 
-  useEffect(() => {
+  const loadStudents = () => {
     Promise.all([studentService.getAll(), mentorService.getAll()])
       .then(([sRes, mRes]) => {
         setStudents(sRes.data);
@@ -24,28 +63,66 @@ export default function OpsStudentsPage() {
       })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { loadStudents(); }, []);
 
   const courses = [...new Set(students.flatMap((s) => (s.batches || []).map(b => b?.subject)).filter(Boolean))];
 
-  const filtered = students.filter((s) => {
-    const mentorIds    = (s.batches || []).map(b => b?.mentorId?._id?.toString()).filter(Boolean);
-    const batchSubjects = (s.batches || []).map(b => b?.subject).filter(Boolean);
-    const status = s.isActive ? 'active' : 'inactive';
+  const guestCount   = students.filter(s => s.accountType === 'guest').length;
+  const activeCount  = students.filter(s => s.accountType !== 'guest' && s.isActive).length;
+  const inactiveCount = students.filter(s => s.accountType !== 'guest' && !s.isActive).length;
 
-    const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.email.toLowerCase().includes(search.toLowerCase());
-    const matchMentor = filterMentor === 'all' || mentorIds.includes(filterMentor);
-    const matchStatus = filterStatus === 'all' || status === filterStatus;
-    const matchCourse = filterCourse === 'all' || batchSubjects.includes(filterCourse);
-    return matchSearch && matchMentor && matchStatus && matchCourse;
+  const filtered = students.filter((s) => {
+    const mentorIds      = (s.batches || []).map(b => b?.mentorId?._id?.toString()).filter(Boolean);
+    const batchSubjects  = (s.batches || []).map(b => b?.subject).filter(Boolean);
+    const isGuest        = s.accountType === 'guest';
+    const statusLabel    = isGuest ? 'guest' : s.isActive ? 'active' : 'inactive';
+
+    const matchSearch  = s.name.toLowerCase().includes(search.toLowerCase()) || s.email.toLowerCase().includes(search.toLowerCase());
+    const matchMentor  = filterMentor === 'all' || mentorIds.includes(filterMentor);
+    const matchStatus  = filterStatus === 'all' || (!isGuest && statusLabel === filterStatus);
+    const matchCourse  = filterCourse === 'all' || batchSubjects.includes(filterCourse);
+    const matchType    = filterType === 'all'
+      || (filterType === 'guest' && isGuest)
+      || (filterType === 'student' && !isGuest);
+
+    return matchSearch && matchMentor && matchStatus && matchCourse && matchType;
   });
 
-  const avgProgress = students.length
-    ? Math.round(students.reduce((a, s) => a + (s.progress || 0), 0) / students.length)
-    : 0;
+  // const avgProgress = students.filter(s => s.accountType !== 'guest').length
+  //   ? Math.round(
+  //       students.filter(s => s.accountType !== 'guest').reduce((a, s) => a + (s.progress || 0), 0) /
+  //       students.filter(s => s.accountType !== 'guest').length
+  //     )
+  //   : 0;
+
+  const handleGrantAccess = async () => {
+    if (!grantTarget) return;
+    setGrantLoading(true);
+    try {
+      await studentService.grantAccess(grantTarget._id);
+      setGrantTarget(null);
+      setLoading(true);
+      loadStudents();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setGrantLoading(false);
+    }
+  };
 
   return (
     <div className="p-6 flex flex-col gap-4 fade-in">
+      {grantTarget && (
+        <GrantAccessModal
+          student={grantTarget}
+          onConfirm={handleGrantAccess}
+          onClose={() => setGrantTarget(null)}
+          loading={grantLoading}
+        />
+      )}
+
       <div className="flex justify-between items-start">
         <div>
           <h2 className="text-xl font-extrabold text-gray-900">All Students</h2>
@@ -60,22 +137,50 @@ export default function OpsStudentsPage() {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Total',        value: students.length,                            color: '#7c3aed', bg: '#f5f3ff' },
-          { label: 'Active',       value: students.filter(s => s.isActive).length,    color: '#10b981', bg: '#d1fae5' },
-          { label: 'Inactive',     value: students.filter(s => !s.isActive).length,   color: '#ef4444', bg: '#fee2e2' },
-          { label: 'Avg Progress', value: `${avgProgress}%`,                          color: '#f59e0b', bg: '#fef3c7' },
+          { label: 'Total',        value: students.length,  color: '#7c3aed', bg: '#f5f3ff' },
+          { label: 'Active',       value: activeCount,       color: '#10b981', bg: '#d1fae5' },
+          { label: 'Inactive',     value: inactiveCount,     color: '#ef4444', bg: '#fee2e2' },
+          { label: 'Guest / Trial',value: guestCount,        color: '#f59e0b', bg: '#fef3c7' },
         ].map((c) => (
-          <div key={c.label} className="rounded-xl px-5 py-4 border border-black/[0.04]" style={{ background: c.bg }}>
+          <div
+            key={c.label}
+            className="rounded-xl px-5 py-4 border border-black/[0.04] cursor-pointer transition-all hover:scale-[1.02]"
+            style={{ background: c.bg }}
+            onClick={() => setFilterType(c.label === 'Guest / Trial' ? 'guest' : c.label === 'Active' ? 'student' : 'all')}
+          >
             <p className="text-[22px] font-extrabold" style={{ color: c.color }}>{c.value}</p>
             <p className="text-xs text-gray-500">{c.label}</p>
           </div>
         ))}
       </div>
 
+      {/* Type filter tabs */}
+      <div className="flex gap-2">
+        {[
+          { value: 'all',     label: 'All' },
+          { value: 'student', label: 'Active Students' },
+          { value: 'guest',   label: `Guest Users (${guestCount})` },
+        ].map((t) => (
+          <button
+            key={t.value}
+            onClick={() => setFilterType(t.value)}
+            className={`px-4 py-1.5 rounded-full text-[13px] font-semibold transition-colors border ${
+              filterType === t.value
+                ? t.value === 'guest'
+                  ? 'bg-amber-100 text-amber-700 border-amber-300'
+                  : 'bg-violet-100 text-violet-700 border-violet-300'
+                : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       {/* Filters */}
-      <div className="flex gap-2.5 bg-white px-4 py-3 rounded-xl border border-gray-200">
+      <div className="flex flex-wrap gap-2.5 bg-white px-4 py-3 rounded-xl border border-gray-200">
         <input
           className={`${inputClass} flex-1`}
           placeholder="Search students..."
@@ -90,7 +195,8 @@ export default function OpsStudentsPage() {
           <option value="all">All Courses</option>
           {courses.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
-        <select className={inputClass} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+        <select className={inputClass} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}
+          disabled={filterType === 'guest'}>
           <option value="all">All Status</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
@@ -100,13 +206,15 @@ export default function OpsStudentsPage() {
       {error && <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-3">{error}</p>}
 
       {/* Table */}
-      <div className="bg-white rounded-[14px] border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-[14px] border border-gray-200 overflow-hidden overflow-x-auto">
+        <div className="min-w-[720px]">
         <div className="flex px-5 py-2.5 bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-[0.4px] gap-3">
           <span className="flex-[2]">Student</span>
           <span className="flex-[2]">Course / Batch</span>
           <span className="flex-[2]">Mentor</span>
           <span className="flex-1">Progress</span>
           <span className="flex-1">Status</span>
+          <span className="w-[110px]">Action</span>
         </div>
 
         {loading ? (
@@ -116,18 +224,19 @@ export default function OpsStudentsPage() {
         ) : filtered.length === 0 ? (
           <div className="p-10 text-center text-gray-400">No students match your filters</div>
         ) : filtered.map((s) => {
-          const initials      = s.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
-          const batches         = s.batches || [];
-          const uniqueSubjects  = [...new Set(batches.map(b => b?.subject).filter(Boolean))];
-          const courseLabel     = uniqueSubjects.length === 0 ? '—' : uniqueSubjects.length === 1 ? uniqueSubjects[0] : `${uniqueSubjects.length} subjects`;
-          const batchLabel      = batches.length === 0 ? '—' : batches.length === 1 ? (batches[0]?.name || '—') : `${batches.length} batches`;
-          const mentors         = [...new Map(batches.map(b => b?.mentorId).filter(Boolean).map(m => [m._id?.toString(), m])).values()];
-          const isActive      = s.isActive !== false;
-          const progress      = s.progress || 0;
-          const pc            = progress >= 80 ? '#10b981' : progress >= 50 ? '#f59e0b' : '#ef4444';
+          const initials       = s.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+          const batches        = s.batches || [];
+          const uniqueSubjects = [...new Set(batches.map(b => b?.subject).filter(Boolean))];
+          const courseLabel    = uniqueSubjects.length === 0 ? '—' : uniqueSubjects.length === 1 ? uniqueSubjects[0] : `${uniqueSubjects.length} subjects`;
+          const batchLabel     = batches.length === 0 ? '—' : batches.length === 1 ? (batches[0]?.name || '—') : `${batches.length} batches`;
+          const mentorList     = [...new Map(batches.map(b => b?.mentorId).filter(Boolean).map(m => [m._id?.toString(), m])).values()];
+          const isGuest        = s.accountType === 'guest';
+          const isActive       = s.isActive !== false;
+          const progress       = s.progress || 0;
+          const pc             = progress >= 80 ? '#10b981' : progress >= 50 ? '#f59e0b' : '#ef4444';
 
           return (
-            <div key={s._id} className="flex items-center px-5 py-3 border-b border-gray-100 gap-3">
+            <div key={s._id} className={`flex items-center px-5 py-3 border-b border-gray-100 gap-3 ${isGuest ? 'bg-amber-50/40' : ''}`}>
               <div className="flex-[2] flex items-center gap-2.5">
                 <div
                   className="w-[34px] h-[34px] rounded-full text-white font-bold text-xs flex items-center justify-center shrink-0"
@@ -136,8 +245,18 @@ export default function OpsStudentsPage() {
                   {initials}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{s.name}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{s.name}</p>
+                    {isGuest && (
+                      <span className="shrink-0 text-[10px] font-bold px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full border border-amber-200">
+                        Guest
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-gray-400 truncate">{s.email}</p>
+                  {isGuest && s.grade && (
+                    <p className="text-[11px] text-amber-600">{s.grade} · {s.targetYear || 'Target TBD'}</p>
+                  )}
                 </div>
               </div>
               <div className="flex-[2]">
@@ -145,13 +264,13 @@ export default function OpsStudentsPage() {
                 <p className="text-[11px] text-gray-400">{batchLabel}</p>
               </div>
               <div className="flex-[2] flex items-center gap-2">
-                {mentors.length > 0 ? (
+                {mentorList.length > 0 ? (
                   <>
                     <div className="w-7 h-7 rounded-full bg-gradient-to-br from-ops-primary to-purple-400 text-white font-bold text-[11px] flex items-center justify-center shrink-0">
-                      {mentors[0].name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                      {mentorList[0].name?.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                     </div>
                     <span className="text-[13px] text-gray-700 truncate">
-                      {mentors.length === 1 ? mentors[0].name : `${mentors[0].name} +${mentors.length - 1}`}
+                      {mentorList.length === 1 ? mentorList[0].name : `${mentorList[0].name} +${mentorList.length - 1}`}
                     </span>
                   </>
                 ) : (
@@ -159,22 +278,52 @@ export default function OpsStudentsPage() {
                 )}
               </div>
               <div className="flex-1">
-                <p className="text-[13px] font-bold" style={{ color: pc }}>{progress}%</p>
-                <div className="h-1 bg-gray-200 rounded-full overflow-hidden mt-1">
-                  <div className="h-full rounded-full" style={{ width: `${progress}%`, background: pc }} />
-                </div>
+                {isGuest ? (
+                  <p className="text-[12px] text-amber-600 font-medium">Trial</p>
+                ) : (
+                  <>
+                    <p className="text-[13px] font-bold" style={{ color: pc }}>{progress}%</p>
+                    <div className="h-1 bg-gray-200 rounded-full overflow-hidden mt-1">
+                      <div className="h-full rounded-full" style={{ width: `${progress}%`, background: pc }} />
+                    </div>
+                  </>
+                )}
               </div>
               <div className="flex-1">
                 <span
                   className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold"
-                  style={{ background: isActive ? '#d1fae5' : '#fee2e2', color: isActive ? '#065f46' : '#991b1b' }}
+                  style={
+                    isGuest
+                      ? { background: '#fef3c7', color: '#92400e' }
+                      : isActive
+                      ? { background: '#d1fae5', color: '#065f46' }
+                      : { background: '#fee2e2', color: '#991b1b' }
+                  }
                 >
-                  {isActive ? 'active' : 'inactive'}
+                  {isGuest ? 'guest' : isActive ? 'active' : 'inactive'}
                 </span>
+              </div>
+              <div className="w-[110px]">
+                {isGuest ? (
+                  <button
+                    onClick={() => setGrantTarget(s)}
+                    className="px-3 py-1.5 rounded-lg text-[12px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition-colors whitespace-nowrap"
+                  >
+                    Grant Access
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => navigate(`/operations/students/${s._id}`)}
+                    className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-indigo-600 border border-indigo-200 hover:bg-indigo-50 transition-colors"
+                  >
+                    View
+                  </button>
+                )}
               </div>
             </div>
           );
         })}
+        </div>
       </div>
     </div>
   );

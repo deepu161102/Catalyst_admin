@@ -75,7 +75,7 @@ export default function StudentsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: 'Total',        value: students.length,                color: '#0d9488', bg: '#f0fdfa' },
           { label: 'Active',       value: activeCount,                    color: '#10b981', bg: '#d1fae5' },
@@ -89,7 +89,7 @@ export default function StudentsPage() {
         ))}
       </div>
 
-      <div className="flex gap-3 items-center bg-white px-4 py-3 rounded-xl border border-gray-200">
+      <div className="flex flex-wrap gap-3 items-center bg-white px-4 py-3 rounded-xl border border-gray-200">
         <div className="flex-1 flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2">
           <span className="text-gray-400 flex">{searchIcon}</span>
           <input
@@ -119,7 +119,8 @@ export default function StudentsPage() {
 
       {error && <p className="text-red-600 text-sm bg-red-50 border border-red-200 rounded-lg px-4 py-3">{error}</p>}
 
-      <div className="bg-white rounded-[14px] border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-[14px] border border-gray-200 overflow-hidden overflow-x-auto">
+        <div className="min-w-[680px]">
         <div className="flex px-5 py-3 bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-[0.4px] gap-3">
           <span className="flex-[2]">Student</span>
           <span className="flex-[2]">Course / Batch</span>
@@ -189,6 +190,7 @@ export default function StudentsPage() {
             );
           })
         )}
+        </div>
       </div>
     </div>
   );

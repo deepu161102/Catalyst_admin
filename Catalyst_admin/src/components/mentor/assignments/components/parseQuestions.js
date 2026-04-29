@@ -40,6 +40,7 @@ function validateRow(raw) {
       correctAnswer,
       explanation:   (raw.explanation || '').trim(),
       score:         isNaN(rawScore) || rawScore <= 0 ? 1 : rawScore,
+      topic:         (raw.topic || '').trim(),
     },
   };
 }
@@ -82,6 +83,7 @@ function fromJSON(text) {
       explanation:    item.explanation   || '',
       score:          item.score         ?? 1,
       module:         item.module        ?? 1,
+      topic:          item.topic         || '',
     };
     return { rowNum: i + 1, raw, ...validateRow(raw) };
   });
@@ -101,7 +103,7 @@ export async function parseQuestionFile(file) {
 
 // ── CSV template (for download) ───────────────────────────────
 export const CSV_TEMPLATE_CONTENT =
-  'title,description,choice_a,choice_b,choice_c,choice_d,correct_answer,explanation,score,module\n' +
-  '"What is 2 + 2?","","1","2","4","5","C","2+2 equals 4",1,1\n' +
-  '"Which word is a noun?","Read the sentence below.","Run","Quickly","Table","Jumped","C","A noun names a thing",1,1\n' +
-  '"Solve for x: 3x = 9","","x=1","x=2","x=3","x=4","C","Divide both sides by 3",1,2\n';
+  'title,description,choice_a,choice_b,choice_c,choice_d,correct_answer,explanation,score,module,topic\n' +
+  '"What is 2 + 2?","","1","2","4","5","C","2+2 equals 4",1,1,"Arithmetic"\n' +
+  '"Which word is a noun?","Read the sentence below.","Run","Quickly","Table","Jumped","C","A noun names a thing",1,1,"Parts of Speech"\n' +
+  '"Solve for x: 3x = 9","","x=1","x=2","x=3","x=4","C","Divide both sides by 3",1,2,"Linear Equations"\n';

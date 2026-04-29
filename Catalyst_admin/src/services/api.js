@@ -39,12 +39,13 @@ export const mentorService = {
 };
 
 export const studentService = {
-  getAll:      ()              => req('/students'),
-  getById:     (id)            => req(`/students/${id}`),
-  getByMentor: (mentorId)      => req(`/students/by-mentor/${mentorId}`),
-  create:      (payload)       => req('/students', { method: 'POST', body: JSON.stringify(payload) }),
-  update:      (id, payload)   => req(`/students/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
-  remove:      (id)            => req(`/students/${id}`, { method: 'DELETE' }),
+  getAll:       ()              => req('/students'),
+  getById:      (id)            => req(`/students/${id}`),
+  getByMentor:  (mentorId)      => req(`/students/by-mentor/${mentorId}`),
+  create:       (payload)       => req('/students', { method: 'POST', body: JSON.stringify(payload) }),
+  update:       (id, payload)   => req(`/students/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  remove:       (id)            => req(`/students/${id}`, { method: 'DELETE' }),
+  grantAccess:  (id)            => req(`/students/${id}/grant-access`, { method: 'PUT' }),
 };
 
 export const assignmentService = {
@@ -57,6 +58,16 @@ export const assignmentService = {
   setStatus:     (id, status)   => req(`/assignments/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
   enrollBatches:  (id, batchIds) => req(`/assignments/${id}/enroll`, { method: 'POST', body: JSON.stringify({ batchIds }) }),
   unenrollBatch:  (id, batchId)  => req(`/assignments/${id}/enroll/${batchId}`, { method: 'DELETE' }),
+};
+
+export const opsAssignmentService = {
+  getByOps:  (opsId)        => req(`/assignments?ownedBy=ops&opsId=${opsId}`),
+  getById:   (id)           => req(`/assignments/${id}`),
+  getProgress: (id)         => req(`/assignments/${id}/progress`),
+  create:    (payload)      => req('/assignments', { method: 'POST', body: JSON.stringify(payload) }),
+  update:    (id, payload)  => req(`/assignments/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  remove:    (id)           => req(`/assignments/${id}`, { method: 'DELETE' }),
+  setStatus: (id, status)   => req(`/assignments/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
 };
 
 export const chatService = {

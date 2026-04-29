@@ -39,31 +39,35 @@ function computeTotals(data) {
 // ════════════════════════════════════════════════════════════
 // STEP 1 — Assignment Info
 // ════════════════════════════════════════════════════════════
-function StepInfo({ data, onChange }) {
+function StepInfo({ data, onChange, opsMode }) {
   const set = (key, val) => onChange({ ...data, [key]: val });
 
   return (
     <div className="max-w-2xl mx-auto space-y-7">
       <div>
-        <h3 className="text-xl font-extrabold text-gray-900 mb-1">Assignment Details</h3>
+        <h3 className="text-xl font-extrabold text-gray-900 mb-1">
+          {opsMode ? 'Explore Test Details' : 'Assignment Details'}
+        </h3>
         <p className="text-sm text-gray-500">
-          Give your SAT practice test a name and set the basics. You can enroll batches after publishing.
+          {opsMode
+            ? 'Give this explore test a name. It will be visible to all guest / trial students.'
+            : 'Give your SAT practice test a name and set the basics. You can enroll batches after publishing.'}
         </p>
       </div>
 
       {/* Title */}
-      <Field label="Assignment Title" required>
+      <Field label={opsMode ? 'Test Title' : 'Assignment Title'} required>
         <input
           type="text"
           value={data.title}
           onChange={(e) => set('title', e.target.value)}
-          placeholder="e.g. SAT Practice Test #1 – Reading & Writing Focus"
+          placeholder={opsMode ? 'e.g. SAT Diagnostic Test – April 2025' : 'e.g. SAT Practice Test #1 – Reading & Writing Focus'}
           className={inputCls}
         />
       </Field>
 
       {/* Description */}
-      <Field label="Description" hint="Optional instructions or overview for your students">
+      <Field label="Description" hint="Optional instructions or overview for students">
         <textarea
           value={data.description}
           onChange={(e) => set('description', e.target.value)}
@@ -73,15 +77,103 @@ function StepInfo({ data, onChange }) {
         />
       </Field>
 
-      {/* Due date */}
-      <Field label="Due Date" required>
-        <input
-          type="date"
-          value={data.dueDate}
-          onChange={(e) => set('dueDate', e.target.value)}
-          className={`${inputCls} w-auto`}
-        />
-      </Field>
+      {/* Due date — not shown for ops explore tests */}
+      {!opsMode && (
+        <Field label="Due Date" required>
+          <input
+            type="date"
+            value={data.dueDate}
+            onChange={(e) => set('dueDate', e.target.value)}
+            className={`${inputCls} w-auto`}
+          />
+        </Field>
+      )}
+
+      {opsMode ? (
+        /* Ops mode: locked guest access + type picker always visible */
+        <div className="rounded-2xl border-2 border-cyan-200 bg-cyan-50/40 p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-cyan-100 flex items-center justify-center text-cyan-700 font-bold text-sm shrink-0">🌐</div>
+            <div>
+              <p className="text-[13px] font-extrabold text-cyan-800">Guest Access — Always On</p>
+              <p className="text-xs text-cyan-600 mt-0.5">Explore tests are always visible to all guest / trial students.</p>
+            </div>
+          </div>
+          <Field label="Test Type" hint="Shown as a badge in the student portal">
+            <div className="flex gap-2">
+              {[
+                { value: 'diagnostic', label: '🩺 Diagnostic Test',  desc: 'Initial skill assessment' },
+                { value: 'practice',   label: '📝 Practice Test',     desc: 'Timed practice run' },
+              ].map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => set('assignmentType', opt.value)}
+                  className={`flex-1 px-4 py-3 rounded-xl border-2 text-left transition-all ${
+                    data.assignmentType === opt.value
+                      ? 'border-cyan-400 bg-cyan-50 text-cyan-800'
+                      : 'border-gray-200 bg-white text-gray-600 hover:border-cyan-200'
+                  }`}
+                >
+                  <p className="text-[13px] font-bold">{opt.label}</p>
+                  <p className="text-[11px] opacity-70 mt-0.5">{opt.desc}</p>
+                </button>
+              ))}
+            </div>
+          </Field>
+        </div>
+      ) : (
+        /* Mentor mode: normal guest toggle */
+        <div className="rounded-2xl border-2 border-dashed border-amber-200 bg-amber-50/40 p-5 space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[13px] font-extrabold text-amber-800">Guest / Trial Access</p>
+              <p className="text-xs text-amber-600 mt-0.5 leading-relaxed">
+                Enable to make this assignment visible to guest (trial) users who haven't purchased a course yet.
+                Use this for diagnostic tests and practice tests you want leads to attempt.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => set('isGuestAccessible', !data.isGuestAccessible)}
+              className={`relative w-12 h-6 rounded-full transition-colors duration-200 focus:outline-none shrink-0 mt-0.5 ${
+                data.isGuestAccessible ? 'bg-amber-500' : 'bg-gray-200'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${
+                  data.isGuestAccessible ? 'translate-x-6' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          {data.isGuestAccessible && (
+            <Field label="Assignment Type" hint="Shown as a badge in the guest portal">
+              <div className="flex gap-2">
+                {[
+                  { value: 'diagnostic', label: '🩺 Diagnostic Test',  desc: 'Initial skill assessment' },
+                  { value: 'practice',   label: '📝 Practice Test',     desc: 'Timed practice run' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => set('assignmentType', opt.value)}
+                    className={`flex-1 px-4 py-3 rounded-xl border-2 text-left transition-all ${
+                      data.assignmentType === opt.value
+                        ? 'border-amber-400 bg-amber-50 text-amber-800'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-amber-200'
+                    }`}
+                  >
+                    <p className="text-[13px] font-bold">{opt.label}</p>
+                    <p className="text-[11px] opacity-70 mt-0.5">{opt.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </Field>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -342,15 +434,16 @@ function StepRules({ data, onChange }) {
 // ════════════════════════════════════════════════════════════
 // STEP 5 — Review & Publish
 // ════════════════════════════════════════════════════════════
-function StepReview({ data, onGoToStep }) {
+function StepReview({ data, onGoToStep, opsMode }) {
   const { totalQ, totalScore } = computeTotals(data);
   //const passingPoints = Math.ceil((totalScore * data.passingScore) / 100);
 
   const warnings = [];
-  if (!data.title.trim())  warnings.push({ type: 'error', step: 1, msg: 'Assignment title is required.' });
-  if (!data.dueDate)       warnings.push({ type: 'warn',  step: 1, msg: 'No due date set.' });
+  if (!data.title.trim())         warnings.push({ type: 'error', step: 1, msg: 'Title is required.' });
+  if (!opsMode && !data.dueDate)  warnings.push({ type: 'warn',  step: 1, msg: 'No due date set.' });
   if (totalQ === 0)        warnings.push({ type: 'error', step: 3, msg: 'No questions added yet. Go to Step 3.' });
-  warnings.push({ type: 'info', step: null, msg: 'Publish first, then enroll batches from the Assignments list.' });
+  if (!opsMode) warnings.push({ type: 'info', step: null, msg: 'Publish first, then enroll batches from the Assignments list.' });
+  if (opsMode)  warnings.push({ type: 'info', step: null, msg: 'Once published, this test will be immediately visible to all guest / trial students.' });
 
   return (
     <div className="max-w-2xl mx-auto space-y-7">
@@ -455,6 +548,21 @@ function StepReview({ data, onGoToStep }) {
         </div>
       )}
 
+      {/* Guest access summary */}
+      {data.isGuestAccessible && (
+        <div className="flex items-center gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50">
+          <span className="text-lg shrink-0">{data.assignmentType === 'diagnostic' ? '🩺' : '📝'}</span>
+          <div>
+            <p className="text-[13px] font-bold text-amber-800">
+              Guest Accessible — {data.assignmentType === 'diagnostic' ? 'Diagnostic Test' : 'Practice Test'}
+            </p>
+            <p className="text-xs text-amber-600 mt-0.5">
+              Trial users will see this assignment in their portal after you publish it.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Warnings / Info */}
       {warnings.length > 0 && (
         <div className="space-y-2">
@@ -513,7 +621,7 @@ function Field({ label, required, hint, children }) {
 // ════════════════════════════════════════════════════════════
 // MAIN — CreateAssignmentPage
 // ════════════════════════════════════════════════════════════
-export default function CreateAssignmentPage({ initial, onSave, onClose }) {
+export default function CreateAssignmentPage({ initial, opsMode = false, onSave, onClose }) {
   const [step, setStep] = useState(1);
   const [data, setData] = useState({
     ...initial,
@@ -521,12 +629,12 @@ export default function CreateAssignmentPage({ initial, onSave, onClose }) {
   });
 
   const canAdvance = () => {
-    if (step === 1) return data.title.trim().length > 0 && !!data.dueDate;
+    if (step === 1) return data.title.trim().length > 0 && (opsMode || !!data.dueDate);
     return true;
   };
 
   const { totalQ } = computeTotals(data);
-  const canPublish  = data.title.trim() && data.dueDate && totalQ > 0;
+  const canPublish  = data.title.trim() && (opsMode || data.dueDate) && totalQ > 0;
 
   const handleSaveDraft = () => onSave({ ...data, status: 'draft' });
   const handlePublish   = () => {
@@ -583,11 +691,11 @@ export default function CreateAssignmentPage({ initial, onSave, onClose }) {
 
       {/* ── Step content ── */}
       <div className="flex-1 overflow-y-auto py-8 px-6">
-        {step === 1 && <StepInfo      data={data} onChange={setData} />}
+        {step === 1 && <StepInfo      data={data} onChange={setData} opsMode={opsMode} />}
         {step === 2 && <StepStructure data={data} onChange={setData} />}
         {step === 3 && <SectionBuilder data={data} onChange={setData} />}
         {step === 4 && <StepRules     data={data} onChange={setData} />}
-        {step === 5 && <StepReview    data={data} onGoToStep={setStep} />}
+        {step === 5 && <StepReview    data={data} onGoToStep={setStep} opsMode={opsMode} />}
       </div>
 
       {/* ── Footer nav ── */}

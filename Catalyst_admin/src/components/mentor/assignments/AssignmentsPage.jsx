@@ -39,17 +39,19 @@ function buildDefaultSections() {
 
 function newAssignment(mentorId) {
   return {
-    _id:             null,   // null = not yet saved
+    _id:               null,   // null = not yet saved
     mentorId,
-    title:           '',
-    description:     '',
-    dueDate:         '',
-    enrolledBatches: [],
-    status:          'draft',
-    createdAt:       new Date().toISOString(),
-    passingScore:    70,
-    rules:           [],
-    sections:        buildDefaultSections(),
+    title:             '',
+    description:       '',
+    dueDate:           '',
+    enrolledBatches:   [],
+    status:            'draft',
+    createdAt:         new Date().toISOString(),
+    passingScore:      70,
+    rules:             [],
+    isGuestAccessible: false,
+    assignmentType:    'full',
+    sections:          buildDefaultSections(),
   };
 }
 
@@ -137,6 +139,11 @@ function AssignmentCard({ assignment, onEdit, onDelete, onTogglePublish, onEnrol
           <span>🎯 Pass: {assignment.passingScore}%</span>
           {(assignment.enrolledBatches || []).length > 0 && (
             <span>👥 {(assignment.enrolledBatches || []).length} batch{(assignment.enrolledBatches || []).length !== 1 ? 'es' : ''} enrolled</span>
+          )}
+          {assignment.isGuestAccessible && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold border border-amber-200">
+              {assignment.assignmentType === 'diagnostic' ? '🩺 Diagnostic' : '📝 Practice'} · Guest
+            </span>
           )}
         </div>
 
@@ -294,6 +301,7 @@ export default function AssignmentsPage() {
               number:        q.number,
               title:         q.title,
               description:   q.description,
+              topic:         q.topic || '',
               choices:       q.choices,
               correctAnswer: q.correctAnswer,
               explanation:   q.explanation,
