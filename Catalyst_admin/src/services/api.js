@@ -83,6 +83,56 @@ export const studentAssignmentService = {
   getProgress: (id) => req(`/assignments/${id}/progress`),
 };
 
+// ── SAT Admin service ────────────────────────────────────────
+const reqFile = (url, formData) => {
+  const token = sessionStorage.getItem('catalyst_token');
+  return fetch(`${BASE_URL}${url}`, {
+    credentials: 'include',
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    method: 'POST',
+    body: formData,
+  }).then(async (res) => {
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || 'Something went wrong');
+    return data;
+  });
+};
+
+export const satAdminService = {
+  // Question bank
+  bulkUpload:       (formData)     => reqFile('/sat/admin/question-bank/bulk-upload', formData),
+  getQuestions:     (params = {})  => { const qs = new URLSearchParams(params).toString(); return req(`/sat/admin/question-bank${qs ? `?${qs}` : ''}`); },
+  getStats:         ()             => req('/sat/admin/question-bank/stats'),
+  updateQuestion:   (id, payload)  => req(`/sat/admin/question-bank/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteQuestion:   (id)           => req(`/sat/admin/question-bank/${id}`, { method: 'DELETE' }),
+  // Subject exam configs
+  getExamConfigs:   (params = {})  => { const qs = new URLSearchParams(params).toString(); return req(`/sat/admin/exam-configs${qs ? `?${qs}` : ''}`); },
+  getExamConfigById:(id)           => req(`/sat/admin/exam-configs/${id}`),
+  createExamConfig: (payload)      => req('/sat/admin/exam-configs', { method: 'POST', body: JSON.stringify(payload) }),
+  updateExamConfig: (id, payload)  => req(`/sat/admin/exam-configs/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  // Full length configs
+  getFullLengthConfigs:   ()              => req('/sat/admin/full-length-configs'),
+  createFullLengthConfig: (payload)       => req('/sat/admin/full-length-configs', { method: 'POST', body: JSON.stringify(payload) }),
+  updateFullLengthConfig: (id, payload)   => req(`/sat/admin/full-length-configs/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+};
+
+export const satStudentService = {
+  getAssignments: (studentId)             => req(`/sat/test/assignments?studentId=${studentId}`),
+  startSession:   (payload)               => req('/sat/test/start', { method: 'POST', body: JSON.stringify(payload) }),
+  submitModule1:  (sessionId, payload)    => req(`/sat/test/${sessionId}/module/1/submit`, { method: 'POST', body: JSON.stringify(payload) }),
+  getModule2:     (sessionId)             => req(`/sat/test/${sessionId}/module/2`),
+  submitModule2:  (sessionId, payload)    => req(`/sat/test/${sessionId}/module/2/submit`, { method: 'POST', body: JSON.stringify(payload) }),
+  getResults:     (sessionId)             => req(`/sat/test/${sessionId}/results`),
+};
+
+export const satMentorService = {
+  listTests:      ()              => req('/sat/mentor/exam-configs'),
+  assign:         (payload)       => req('/sat/mentor/assign', { method: 'POST', body: JSON.stringify(payload) }),
+  assignBatch:    (payload)       => req('/sat/mentor/assign/batch', { method: 'POST', body: JSON.stringify(payload) }),
+  getAssignments: (params = {})   => { const qs = new URLSearchParams(params).toString(); return req(`/sat/mentor/assignments${qs ? `?${qs}` : ''}`); },
+  getResults:     (id)            => req(`/sat/mentor/assignments/${id}/results`),
+};
+
 export const chatService = {
   getConversations: (userId)               => req(`/chat/conversations/${userId}`),
   getMessages:      (userId, otherId, page = 1) => req(`/chat/messages/${userId}/${otherId}?page=${page}`),

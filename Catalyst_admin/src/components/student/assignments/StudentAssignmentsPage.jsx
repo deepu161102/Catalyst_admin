@@ -27,6 +27,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { studentAssignmentService } from '../../../services/api';
 import { StudentReportModal } from '../../mentor/assignments/AssignmentProgressPage';
+import SatStudentTab from '../sat/SatStudentTab';
 
 // ─────────────────────────────────────────────────────────────
 // CONSTANTS
@@ -257,6 +258,7 @@ function AssignmentCard({ item, onViewReport, loadingId }) {
 export default function StudentAssignmentsPage() {
   const { user } = useAuth();
 
+  const [mainTab, setMainTab] = useState('regular'); // 'regular' | 'sat'
   const [items,   setItems]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [error,   setError]   = useState('');
@@ -407,102 +409,127 @@ export default function StudentAssignmentsPage() {
   return (
     <div className="flex flex-col h-full bg-gray-50/60">
       {/* ── Page header ── */}
-      <div className="px-6 py-4 bg-white border-b border-gray-200 shrink-0">
-        <h2 className="text-base font-extrabold text-gray-900">My Assignments</h2>
-        <p className="text-xs text-gray-400 mt-0.5">
-          {counts.completed} completed · {counts.in_progress} in progress ·{' '}
-          {counts.not_started} not started
-        </p>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-6 space-y-5">
-
-        {/* ── List load error ── */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm flex items-center justify-between">
-            <span>{error}</span>
-            <button
-              onClick={loadAssignments}
-              className="text-red-600 font-bold text-xs underline ml-3 shrink-0"
-            >
-              Retry
-            </button>
-          </div>
-        )}
-
-        {/* ── Report fetch partial error (non-blocking) ── */}
-        {reportError && (
-          <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-xl text-sm flex items-center justify-between">
-            <span>⚠ {reportError}</span>
-            <button
-              onClick={() => setReportError('')}
-              className="text-amber-600 font-bold text-sm ml-3 shrink-0"
-            >
-              ×
-            </button>
-          </div>
-        )}
-
-        {/* ── Filter tab bar ── */}
-        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit flex-wrap">
+      <div className="px-6 py-4 bg-white border-b border-gray-200 shrink-0 space-y-3">
+        <div>
+          <h2 className="text-base font-extrabold text-gray-900">My Assignments</h2>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {counts.completed} completed · {counts.in_progress} in progress ·{' '}
+            {counts.not_started} not started
+          </p>
+        </div>
+        {/* ── Main tab bar ── */}
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">
           {[
-            { key: 'all',         label: `All (${counts.all})` },
-            { key: 'completed',   label: `Completed (${counts.completed})` },
-            { key: 'in_progress', label: `In Progress (${counts.in_progress})` },
-            { key: 'not_started', label: `Not Started (${counts.not_started})` },
+            { key: 'regular', label: 'Custom Assignments' },
+            { key: 'sat',     label: 'SAT Tests' },
           ].map((t) => (
             <button
               key={t.key}
-              onClick={() => setFilter(t.key)}
-              className={`px-3 py-1.5 rounded-[10px] text-xs font-bold transition-all whitespace-nowrap ${
-                filter === t.key
-                  ? 'bg-white text-teal-600 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
+              onClick={() => setMainTab(t.key)}
+              className={`px-4 py-1.5 rounded-[10px] text-xs font-bold transition-all ${
+                mainTab === t.key ? 'bg-white text-teal-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               {t.label}
             </button>
           ))}
         </div>
+      </div>
 
-        {/* ── Analytics info banner ── */}
-        {counts.completed > 0 && (
-          <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-indigo-50 border border-indigo-100">
-            <span className="text-base shrink-0 mt-0.5">📊</span>
-            <p className="text-[12px] text-indigo-700 leading-relaxed">
-              <span className="font-bold">Full analytics available</span> for completed
-              assignments — click <strong>View Report</strong> to see Topic Mastery,
-              Charts, AI-generated performance summary, and download your report.
-            </p>
-          </div>
-        )}
+      <div className="flex-1 overflow-y-auto p-6 space-y-5">
 
-        {/* ── Assignment list ── */}
-        {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <span className="text-5xl mb-3">📭</span>
-            <h3 className="text-base font-extrabold text-gray-700 mb-1">
-              {filter === 'all'
-                ? 'No assignments yet'
-                : `No ${filter.replace('_', ' ')} assignments`}
-            </h3>
-            <p className="text-sm text-gray-400 max-w-xs">
-              {filter === 'all'
-                ? 'Your mentor will assign tests here. Check back soon!'
-                : 'Try switching to a different filter.'}
-            </p>
-          </div>
+        {mainTab === 'sat' ? (
+          <SatStudentTab />
         ) : (
-          <div className="space-y-2">
-            {filtered.map((item, idx) => (
-              <AssignmentCard
-                key={item.assignment?._id || item.assignment?.id || idx}
-                item={item}
-                onViewReport={handleViewReport}
-                loadingId={loadingId}
-              />
-            ))}
-          </div>
+          <>
+            {/* ── List load error ── */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl text-sm flex items-center justify-between">
+                <span>{error}</span>
+                <button
+                  onClick={loadAssignments}
+                  className="text-red-600 font-bold text-xs underline ml-3 shrink-0"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {/* ── Report fetch partial error (non-blocking) ── */}
+            {reportError && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-700 px-4 py-3 rounded-xl text-sm flex items-center justify-between">
+                <span>⚠ {reportError}</span>
+                <button
+                  onClick={() => setReportError('')}
+                  className="text-amber-600 font-bold text-sm ml-3 shrink-0"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
+            {/* ── Filter tab bar ── */}
+            <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit flex-wrap">
+              {[
+                { key: 'all',         label: `All (${counts.all})` },
+                { key: 'completed',   label: `Completed (${counts.completed})` },
+                { key: 'in_progress', label: `In Progress (${counts.in_progress})` },
+                { key: 'not_started', label: `Not Started (${counts.not_started})` },
+              ].map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setFilter(t.key)}
+                  className={`px-3 py-1.5 rounded-[10px] text-xs font-bold transition-all whitespace-nowrap ${
+                    filter === t.key
+                      ? 'bg-white text-teal-600 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* ── Analytics info banner ── */}
+            {counts.completed > 0 && (
+              <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-indigo-50 border border-indigo-100">
+                <span className="text-base shrink-0 mt-0.5">📊</span>
+                <p className="text-[12px] text-indigo-700 leading-relaxed">
+                  <span className="font-bold">Full analytics available</span> for completed
+                  assignments — click <strong>View Report</strong> to see Topic Mastery,
+                  Charts, AI-generated performance summary, and download your report.
+                </p>
+              </div>
+            )}
+
+            {/* ── Assignment list ── */}
+            {filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center">
+                <span className="text-5xl mb-3">📭</span>
+                <h3 className="text-base font-extrabold text-gray-700 mb-1">
+                  {filter === 'all'
+                    ? 'No assignments yet'
+                    : `No ${filter.replace('_', ' ')} assignments`}
+                </h3>
+                <p className="text-sm text-gray-400 max-w-xs">
+                  {filter === 'all'
+                    ? 'Your mentor will assign tests here. Check back soon!'
+                    : 'Try switching to a different filter.'}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filtered.map((item, idx) => (
+                  <AssignmentCard
+                    key={item.assignment?._id || item.assignment?.id || idx}
+                    item={item}
+                    onViewReport={handleViewReport}
+                    loadingId={loadingId}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
 
       </div>
