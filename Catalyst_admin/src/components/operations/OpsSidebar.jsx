@@ -18,6 +18,8 @@ const icons = {
   chevLeft:      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>,
   chevRight:     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>,
   logout:        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>,
+  questionBank:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/><line x1="12" y1="7" x2="16" y2="7"/><line x1="12" y1="11" x2="16" y2="11"/><line x1="9" y1="7" x2="9.01" y2="7"/><line x1="9" y1="11" x2="9.01" y2="11"/></svg>,
+  satConfig:     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/><path d="M14.83 9.17a4 4 0 0 1 0 5.66M9.17 9.17a4 4 0 0 0 0 5.66"/></svg>,
 };
 
 const NAV = [
@@ -29,6 +31,10 @@ const NAV = [
     { key: 'students',      label: 'Students',      path: '/operations/students',      icon: icons.students, color: '#ec4899' },
     { key: 'batches',       label: 'Batches',       path: '/operations/batches',       icon: icons.batches,  color: '#f59e0b' },
     { key: 'explore-tests', label: 'Explore Tests', path: '/operations/explore-tests', icon: icons.explore,  color: '#0891b2' },
+  ]},
+  { section: 'SAT TESTS', items: [
+    { key: 'sat-question-bank', label: 'Question Bank',  path: '/operations/sat/question-bank', icon: icons.questionBank, color: '#7c3aed' },
+    { key: 'sat-exam-configs',  label: 'Exam Configs',   path: '/operations/sat/exam-configs',  icon: icons.satConfig,    color: '#7c3aed' },
   ]},
   { section: 'TOOLS', items: [
     { key: 'reports', label: 'Reports', path: '/operations/reports', icon: icons.reports, color: '#10b981' },
